@@ -1,6 +1,6 @@
 # Status
 
-**Last session:** Day 1 (2026-11-04). Milestones 1, 2 and 3 done.
+**Last session:** Day 1 (2026-11-04). Milestones 1, 2, 3 and 5 done (milestone 4 unit tests deferred).
 
 ## Done
 - ROM set verified against MAME master (futaribl block identical to 0.289): all 4 SHA1s OK.
@@ -32,16 +32,27 @@
 - One command: `tools/build_game.sh futaribl <rom_dir>` (verify, boot, discover, generate, compile,
   lockstep). Outputs in `build/futaribl/` (gitignored).
 
-## Next (milestone 5 runtime; milestone 4 instruction tests can be folded in)
-1. Instruction unit tests: random register/memory states, one instruction at a time, interpreter vs
-   generated single-instruction functions (catches bugs lockstep can't, since both share isa.py bodies
-   only the control-flow code differs; semantic bugs in isa.py need a second reference: compare a
-   sample against MAME's SH-3 core or the SH-3 manual).
-2. Runtime: SH7709S INTC (IRQ2 vsync at 60.0183806 Hz → INTEVT2 code for the vector table), TMU if used,
-   ports/inputs, NAND K9F1G08U0M command set (read ID, read page), RTC9701 serial EEPROM, blitter register
-   stubs. Read only the needed MAME files (`src/devices/cpu/sh/sh7709s*`, `sh3comn*`, `machine/nandflash*`,
-   `machine/rtc9701*`) and check their license headers.
-3. Goal: game runs past the idle loop, frame counter advances, NAND graphics load begins, blitter
-   command lists appear in RAM (ready for milestone 6 reference blitter).
-4. Fix the uncached-alias miss: dispatch should normalize alias for code addresses (already phys) -
-   investigate why 0xAC002A54 isn't a block start (probably a mid-function entry via literal 0xAC002A54).
+- **Milestone 5 (runtime)**: `core/runtime/cv1k.c/.h` = memory map, INTC (IRQ2 vsync at 60.0183806 Hz,
+  1,706,145 instruction-cycles per frame for now), TRAPA exception, DMAC (4 ch, immediate transfers through
+  the bus), ports/inputs, NAND K9F1G08U0M (read/ID/status/program/erase), RTC9701 serial EEPROM+RTC,
+  blitter registers (logged, `on_exec` hook for the renderer), FPGA bitstream counter. Hardware facts in
+  `docs/hardware/cv1000.md` ("On-chip peripherals").
+  `core/runtime/run_headless.c`: boots and runs N frames, recompiled or `--interp`; `--misses file` writes
+  addresses that needed the interpreter; `tools/build_game.sh` feeds them back into discovery
+  (profile-guided). **futaribl now: 0 interpreter fallbacks**, 5,624 functions.
+  **Result (1200 frames):** game boots, uploads FPGA bitstream, streams 9,256 KB from NAND by DMA,
+  then renders attract mode at exactly 1 blitter list per frame. Recompiled 618 fps headless vs
+  interpreter 69 fps; both give identical IRQ/DMA/blit counts (1172 / 4702 / 1137).
+
+## Next (milestone 6: CPU reference blitter)
+1. Read MAME `src/mame/cave/cv1k_v.cpp/.h` (BSD-3, already staged at /mnt/user-data/uploads/fbl/mame-mame0289/
+   src/mame/cave/): command list format (gfx_exec / gfx_create_shadow_copy), VRAM layout (8192x4096?
+   RGB555+transparency), blit modes (flip, tint, alpha, src/dst blend modes), clip, scroll, firmware
+   version differences (FW_A..D chosen by bitstream checksum: compute the checksum in fw upload).
+2. `core/render/blit_ref.c`: exact CPU implementation, hooked via `Blitter.on_exec`; frame output =
+   320x240 window of VRAM at scroll. Write PNG frames from run_headless (`--png-every N`).
+3. Get reference frames from MAME for comparison (user can run MAME `futaribl` with
+   `-snapshot_directory`, or I build MAME's cv1k driver only, if cheap) → milestone 7 frame checker.
+4. Inputs: coin/start scripting in run_headless (`--input script`) to get past attract into gameplay.
+Deferred: milestone 4 instruction unit tests (random states, interpreter vs single-instruction
+generated code); IRQ replay lockstep (cv1k irq_log is in place).

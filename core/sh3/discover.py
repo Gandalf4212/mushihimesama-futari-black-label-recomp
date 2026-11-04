@@ -157,10 +157,12 @@ def main():
             indirect |= ind
             work.extend((c, False) for c in calls if c not in done)
         # literal-pool values that point into RAM and are not inside already-decoded instructions
-        cand = [v for v in literals if img.ok(v) and v not in done and v not in rejected and v not in covered]
+        # pointers into already-decoded instructions are certain instruction starts (e.g. code that jumps
+        # into its own body through the uncached alias); others must decode cleanly (strict)
+        cand = [v for v in literals if img.ok(v) and v not in done and v not in rejected]
         if not cand:
             break
-        work = [(v, True) for v in sorted(cand)]
+        work = [(v, v not in covered) for v in sorted(cand)]
 
     out = {
         'functions': {f'{k:08X}': [f'{b:08X}' for b in v] for k, v in sorted(functions.items())},

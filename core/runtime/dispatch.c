@@ -12,7 +12,7 @@ static uint32_t direct_size;
 uint64_t dispatch_misses, dispatch_calls;
 
 #define RAM_BASE 0x0C000000u
-#define MISS_LOG 64
+#define MISS_LOG 4096
 static uint32_t miss_pc[MISS_LOG]; static uint64_t miss_n[MISS_LOG]; static int miss_used;
 
 void dispatch_init(uint32_t ram_size)
@@ -43,6 +43,15 @@ void sh3_miss(SH3 *s) { note_miss(s->pc); sh3_step(s); }
 void sh3_miss_at(SH3 *s, uint32_t pc) { s->pc = pc; note_miss(pc); sh3_step(s); }
 void sh3_bad_slot(SH3 *s, uint32_t pc) { fprintf(stderr, "illegal delay slot at %08x\n", pc); abort(); }
 
+/* One dispatch: run recompiled code from s->pc until it returns (call/return/jump/event). */
+void dispatch_step(SH3 *s)
+{
+    recomp_fn f = lookup(s->pc);
+    dispatch_calls++;
+    if (f) f(s);
+    else { note_miss(s->pc); sh3_step(s); }
+}
+
 void dispatch_run(SH3 *s, uint64_t until_cycles, uint32_t stop_pc)
 {
     s->event_at = until_cycles;
@@ -53,6 +62,13 @@ void dispatch_run(SH3 *s, uint64_t until_cycles, uint32_t stop_pc)
         if (f) f(s);
         else { note_miss(s->pc); sh3_step(s); }   /* interpreter fallback, one instruction */
     }
+}
+
+void dispatch_write_misses(const char *path)
+{
+    FILE *f = fopen(path, "w"); if (!f) return;
+    for (int i = 0; i < miss_used; i++) fprintf(f, "%08X\n", miss_pc[i] & 0x1FFFFFFFu);
+    fclose(f);
 }
 
 void dispatch_report(void)
