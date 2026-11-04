@@ -1,6 +1,6 @@
 # Status
 
-**Last session:** Day 1 (2026-11-04). Milestones 1, 2, 3, 5, 6 done; milestone 7 tools ready (waiting on MAME reference frames) (milestone 4 unit tests deferred).
+**Last session:** Day 1 (2026-11-04). Milestones 1, 2, 3, 5, 6 done; milestone 7 first comparison done: rendering pixel-exact vs MAME (milestone 4 unit tests deferred).
 
 ## Done
 - ROM set verified against MAME master (futaribl block identical to 0.289): all 4 SHA1s OK.
@@ -66,11 +66,21 @@
   Self-test (our frames renumbered +25) passes: offset 25 found, 61/61 identical.
   Input test: COIN1 at 1900, START1 at 1960 reaches the Character Select screen.
 
+- **Milestone 7 first result (2026-11-04)**: MAME 0.289 capture of attract frames 1500-2100 (no inputs,
+  -norotate; user's copy at F:\claude2\fbl\mame_snaps_attract, f_NNNNN.png). Sampled 26 frames (1500,
+  1600, 1700, 1800, 1900, 2000-2100 every 5). **Every MAME frame in our range has an exact pixel match**
+  in our output (1001 frames rendered, ours 1300-2300). Offset MAME - ours = 290 for MAME 1600-1900 and
+  293 for 2000-2100: our instruction-count clock finishes a loading phase 3 frames sooner. That is CPU
+  timing (milestone 10: cycle costs + SH-3 cache model), not rendering.
+  Note: MAME warns "imperfect timing" at startup: press a key, or set `skip_warnings 1` in ui.ini.
+  frame_check.py assumes one global offset, so it reports the 290-offset frames as mismatches;
+  add a per-frame best-match mode (ad hoc check is in the session log: hash lookup per MAME frame).
+
 ## Next
-1. User runs in their MAME 0.289 folder (with roms/futaribl): copy tools/mame/capture.lua and
-   capture.bat there, run `capture.bat 1500 2100 1` (attract, no inputs), copy `snaps\futaribl` to
-   `F:\claude2\fbl\mame_snaps_attract`. Then stage those PNGs, generate ours with
-   `--png dir 1 --png-range 1400 2200`, run frame_check.py, fix mismatches (blitter math, timing of
-   loading, scroll timing at vsync).
-2. With the offset known, second capture with an input script (coin/start/play) to compare gameplay.
-3. Then milestone 8 (Vulkan renderer checked against blit_ref) or 9 (YMZ770 audio).
+1. frame_check.py `--per-frame`: for each MAME frame report the matching our-frame (drift curve).
+2. Gameplay comparison: input script with COIN1/START1/moves (MAME frame numbers), capture with
+   `capture.bat 2600 3400 5 inputs.txt` in MAME, run ours with `--input inputs.txt --frame-offset 293`.
+   Inputs land at different game states if loading drift differs; use attract-relative timing or
+   start inputs after loading is complete (MAME frame >= 2000).
+3. Milestone 8 (Vulkan renderer checked against blit_ref), 9 (YMZ770 audio), 10 (timing/cache model to
+   remove the drift and reproduce slowdown).
