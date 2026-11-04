@@ -1,0 +1,12 @@
+# Never commit game data or anything derived from it.
+# Users supply their own ROM; extracted assets and generated code stay local.
+roms/
+assets/
+generated/
+build/
+*.zip
+*_u2
+*_u4
+u23
+u24
+*.bin
