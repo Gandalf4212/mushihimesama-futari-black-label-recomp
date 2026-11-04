@@ -1,6 +1,6 @@
 # Status
 
-**Last session:** Day 1 (2026-11-04). Milestones 1, 2, 3 and 5 done (milestone 4 unit tests deferred).
+**Last session:** Day 1 (2026-11-04). Milestones 1, 2, 3, 5 and 6 done (milestone 4 unit tests deferred).
 
 ## Done
 - ROM set verified against MAME master (futaribl block identical to 0.289): all 4 SHA1s OK.
@@ -44,15 +44,27 @@
   then renders attract mode at exactly 1 blitter list per frame. Recompiled 618 fps headless vs
   interpreter 69 fps; both give identical IRQ/DMA/blit counts (1172 / 4702 / 1137).
 
-## Next (milestone 6: CPU reference blitter)
-1. Read MAME `src/mame/cave/cv1k_v.cpp/.h` (BSD-3, already staged at /mnt/user-data/uploads/fbl/mame-mame0289/
-   src/mame/cave/): command list format (gfx_exec / gfx_create_shadow_copy), VRAM layout (8192x4096?
-   RGB555+transparency), blit modes (flip, tint, alpha, src/dst blend modes), clip, scroll, firmware
-   version differences (FW_A..D chosen by bitstream checksum: compute the checksum in fw upload).
-2. `core/render/blit_ref.c`: exact CPU implementation, hooked via `Blitter.on_exec`; frame output =
-   320x240 window of VRAM at scroll. Write PNG frames from run_headless (`--png-every N`).
-3. Get reference frames from MAME for comparison (user can run MAME `futaribl` with
-   `-snapshot_directory`, or I build MAME's cv1k driver only, if cheap) → milestone 7 frame checker.
-4. Inputs: coin/start scripting in run_headless (`--input script`) to get past attract into gameplay.
-Deferred: milestone 4 instruction unit tests (random states, interpreter vs single-instruction
-generated code); IRQ replay lockstep (cv1k irq_log is in place).
+- **Milestone 6 (CPU reference blitter)**: `core/render/blit_ref.c/.h` follows MAME cv1k_v.cpp +
+  cv1k_v_in.ipp + cv1k_v_pixel.ipp (BSD-3) as one readable routine: command list ops 0x2000 upload,
+  0x1000 draw, 0xC000 clip, 0x0000/0xF000 end; VRAM 8192x4096 ARGB1555 (bit15 = opaque); 5-bit
+  channels with colrtable/colrtable_rev/colrtable_add lookup math; 8 source x 8 dest blend modes, tint
+  (0x20 = neutral, byte>>2), flip x/y, transparency, clip (screen clip = clip reg ±32 or full VRAM).
+  Reproduces MAME's add_with_clr_square quirk (green/blue use clr0.r) to stay bit-exact with MAME; flag
+  it for a real-hardware check later. Output: 320x240 window at scroll, channels <<3 (as MAME).
+  `core/render/png.c`: dependency-free PNG writer. `run_headless --png <dir> <every N>` saves frames.
+  **Result:** 1800 frames: 971k draws, 11.6k uploads, 0 bad ops. Frame 600 = boot self-test screen
+  ("MUSHIHIMESAMA FUTARI BL. 2009.11.27 / CHECKING MEMORY / CODE AREA 00710250 OK!"); frame 1800 =
+  attract "Today's Original Ranking" screen, visually correct (raw unrotated buffer, game is ROT270).
+  Longer runs find new code: rerun tools/build_game.sh to compile recorded misses.
+
+## Next (milestone 7: frame checker vs MAME)
+1. Input scripting in run_headless (`--input file`: frame-numbered port C/D/L states) to coin up/start.
+2. Reference frames from MAME 0.289: ask the user to run in a MAME folder with the futaribl set:
+   `mame futaribl -window -nothrottle -snapname %g/%i -snapshot_directory snaps` and press F12 at
+   points, OR better: a small MAME Lua script (autoboot_script) that saves a snapshot every N frames
+   with the same input script, then send me the PNGs (staged from F:\claude2\fbl). Snapshot = 320x240
+   (check MAME's -snapsize / ROT270 rotation: use `-norotate` so it matches our raw buffer).
+3. tools/frame_check.py: compare our PNGs vs MAME PNGs per frame, report first mismatching frame,
+   pixel count and a diff image. Expect frame-number offsets (MAME frame 0 vs our boot): align on a
+   distinctive frame.
+4. Then milestone 8 (Vulkan renderer, verified against blit_ref) or 9 (audio), user's choice.

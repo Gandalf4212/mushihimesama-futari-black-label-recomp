@@ -3,6 +3,12 @@
  * GPL-2.0-or-later. */
 #include "cv1k.h"
 #include "dispatch.h"
+#include "../render/blit_ref.h"
+#include "../render/png.h"
+
+static BlitRef g_blit;
+static CV1K *g_m;
+static void on_exec(void *ctx, uint32_t list) { (void)ctx; blit_ref_exec(&g_blit, g_m->ram, g_m->ram_size - 1, list, g_m->blit.clip_x, g_m->blit.clip_y); }
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -17,13 +23,16 @@ int main(int argc, char **argv)
     if (!cv1k_init(&m, argv[1], argv[2], strtoul(argv[3], 0, 16))) return 1;
     uint32_t entry = strtoul(argv[4], 0, 16);
     uint64_t frames = strtoull(argv[5], 0, 10);
-    int interp = 0, report = 60; const char *misses = NULL;
+    int interp = 0, report = 60; const char *misses = NULL, *pngdir = NULL; int png_every = 0;
     for (int i = 6; i < argc; i++) {
         if (!strcmp(argv[i], "--interp")) interp = 1;
         if (!strcmp(argv[i], "--report") && i + 1 < argc) report = atoi(argv[++i]);
         if (!strcmp(argv[i], "--misses") && i + 1 < argc) misses = argv[++i];
+        if (!strcmp(argv[i], "--png") && i + 2 < argc) { pngdir = argv[++i]; png_every = atoi(argv[++i]); }
     }
     SH3 *s = &m.cpu;
+    g_m = &m; blit_ref_init(&g_blit); m.blit.on_exec = on_exec;
+    static uint32_t fb[320 * 240];
     while ((s->pc & 0x1FFFFFFFu) != (entry & 0x1FFFFFFFu)) sh3_step(s);     /* boot */
     m.next_vsync = s->cycles + m.cycles_per_frame;
     if (!interp) dispatch_init(m.ram_size);
@@ -37,6 +46,10 @@ int main(int argc, char **argv)
         if (s->trap) cv1k_take_trap(&m);
         if (s->cycles >= m.next_vsync) {
             cv1k_vsync(&m); m.next_vsync += m.cycles_per_frame;
+            if (pngdir && png_every && m.frame % png_every == 0) {
+                char path[512]; snprintf(path, sizeof path, "%s/frame_%05llu.png", pngdir, (unsigned long long)m.frame);
+                blit_ref_frame(&g_blit, m.blit.scroll_x, m.blit.scroll_y, fb); png_write_rgb(path, fb, 320, 240);
+            }
             if (report && m.frame % report == 0)
                 printf("frame %5llu  pc=%08x  idlevar=%08x  irqs=%llu  blits=+%llu  nand=+%lluKB  snd=%llu  dma=%llu/%lluKB  fpga_bits=%u\n",
                        (unsigned long long)m.frame, s->pc, ram32(&m, 0x0C002310u), (unsigned long long)m.irqs_taken,
@@ -47,6 +60,7 @@ int main(int argc, char **argv)
         cv1k_check_irq(&m);
     }
     double secs = (double)(clock() - t0) / CLOCKS_PER_SEC;
+    printf("blitter: %llu draws, %llu uploads, %llu bad ops\n", (unsigned long long)g_blit.draws, (unsigned long long)g_blit.uploads, (unsigned long long)g_blit.bad_ops);
     printf("%llu frames in %.2f s (%.0f fps), %llu instructions\n", (unsigned long long)frames, secs, frames / secs,
            (unsigned long long)s->insns);
     if (!interp) { dispatch_report(); if (misses) dispatch_write_misses(misses); }
