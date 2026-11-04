@@ -14,6 +14,40 @@ static void on_exec(void *ctx, uint32_t list) { (void)ctx; blit_ref_exec(&g_blit
 #include <string.h>
 #include <time.h>
 
+/* Input script (shared with tools/mame/capture.lua): lines "start_frame duration TOKEN...".
+ * Tokens: COIN1 COIN2 START1 START2 SERVICE TEST, UP DOWN LEFT RIGHT B1..B4 (P1), P2_UP..P2_B4. */
+typedef struct { uint64_t start, dur; uint8_t c, d, l, f; } InEv;
+static InEv g_ev[4096]; static int g_nev; static int64_t g_in_off;
+static void load_inputs(const char *path)
+{
+    FILE *f = fopen(path, "r"); if (!f) { perror(path); exit(1); }
+    char line[512];
+    static const struct { const char *n; char port; uint8_t bit; } map[] = {
+        {"SERVICE",'c',0x01},{"COIN1",'c',0x04},{"COIN2",'c',0x08},{"START1",'c',0x10},{"START2",'c',0x20},{"TEST",'f',0x02},
+        {"UP",'d',1},{"DOWN",'d',2},{"LEFT",'d',4},{"RIGHT",'d',8},{"B1",'d',0x10},{"B2",'d',0x20},{"B3",'d',0x40},{"B4",'d',0x80},
+        {"P2_UP",'l',1},{"P2_DOWN",'l',2},{"P2_LEFT",'l',4},{"P2_RIGHT",'l',8},{"P2_B1",'l',0x10},{"P2_B2",'l',0x20},{"P2_B3",'l',0x40},{"P2_B4",'l',0x80}};
+    while (fgets(line, sizeof line, f) && g_nev < 4096) {
+        char *h = strchr(line, '#'); if (h) *h = 0;
+        char *tok = strtok(line, " \t\r\n"); if (!tok) continue;
+        InEv e = {strtoull(tok, 0, 10), 0, 0, 0, 0, 0};
+        if (!(tok = strtok(NULL, " \t\r\n"))) continue;
+        e.dur = strtoull(tok, 0, 10);
+        while ((tok = strtok(NULL, " \t\r\n")))
+            for (unsigned k = 0; k < sizeof map / sizeof map[0]; k++)
+                if (!strcmp(tok, map[k].n)) { if (map[k].port == 'c') e.c |= map[k].bit; else if (map[k].port == 'd') e.d |= map[k].bit; else if (map[k].port == 'l') e.l |= map[k].bit; else e.f |= map[k].bit; }
+        g_ev[g_nev++] = e;
+    }
+    fclose(f);
+}
+static void apply_inputs(CV1K *m)
+{
+    int64_t fr = (int64_t)m->frame + g_in_off;   /* script frames are MAME frame numbers */
+    uint8_t c = 0, d = 0, l = 0, ff = 0;
+    for (int i = 0; i < g_nev; i++)
+        if (fr >= (int64_t)g_ev[i].start && fr < (int64_t)(g_ev[i].start + g_ev[i].dur)) { c |= g_ev[i].c; d |= g_ev[i].d; l |= g_ev[i].l; ff |= g_ev[i].f; }
+    m->in.c = ~c; m->in.d = ~d; m->in.l = ~l; m->in.f = ~ff;   /* active low */
+}
+
 static uint32_t ram32(CV1K *m, uint32_t a) { uint8_t *q = m->ram + (a - 0x0C000000u); return (uint32_t)q[0] << 24 | q[1] << 16 | q[2] << 8 | q[3]; }
 
 int main(int argc, char **argv)
@@ -23,11 +57,14 @@ int main(int argc, char **argv)
     if (!cv1k_init(&m, argv[1], argv[2], strtoul(argv[3], 0, 16))) return 1;
     uint32_t entry = strtoul(argv[4], 0, 16);
     uint64_t frames = strtoull(argv[5], 0, 10);
-    int interp = 0, report = 60; const char *misses = NULL, *pngdir = NULL; int png_every = 0;
+    int interp = 0, report = 60; const char *misses = NULL, *pngdir = NULL; int png_every = 0; uint64_t png_from = 0, png_to = ~0ull;
     for (int i = 6; i < argc; i++) {
         if (!strcmp(argv[i], "--interp")) interp = 1;
         if (!strcmp(argv[i], "--report") && i + 1 < argc) report = atoi(argv[++i]);
         if (!strcmp(argv[i], "--misses") && i + 1 < argc) misses = argv[++i];
+        if (!strcmp(argv[i], "--input") && i + 1 < argc) load_inputs(argv[++i]);
+        if (!strcmp(argv[i], "--frame-offset") && i + 1 < argc) g_in_off = atoll(argv[++i]);
+        if (!strcmp(argv[i], "--png-range") && i + 2 < argc) { png_from = strtoull(argv[++i], 0, 10); png_to = strtoull(argv[++i], 0, 10); }
         if (!strcmp(argv[i], "--png") && i + 2 < argc) { pngdir = argv[++i]; png_every = atoi(argv[++i]); }
     }
     SH3 *s = &m.cpu;
@@ -45,8 +82,8 @@ int main(int argc, char **argv)
         else dispatch_step(s);
         if (s->trap) cv1k_take_trap(&m);
         if (s->cycles >= m.next_vsync) {
-            cv1k_vsync(&m); m.next_vsync += m.cycles_per_frame;
-            if (pngdir && png_every && m.frame % png_every == 0) {
+            cv1k_vsync(&m); m.next_vsync += m.cycles_per_frame; if (g_nev) apply_inputs(&m);
+            if (pngdir && png_every && m.frame % png_every == 0 && m.frame >= png_from && m.frame <= png_to) {
                 char path[512]; snprintf(path, sizeof path, "%s/frame_%05llu.png", pngdir, (unsigned long long)m.frame);
                 blit_ref_frame(&g_blit, m.blit.scroll_x, m.blit.scroll_y, fb); png_write_rgb(path, fb, 320, 240);
             }

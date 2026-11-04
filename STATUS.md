@@ -1,6 +1,6 @@
 # Status
 
-**Last session:** Day 1 (2026-11-04). Milestones 1, 2, 3, 5 and 6 done (milestone 4 unit tests deferred).
+**Last session:** Day 1 (2026-11-04). Milestones 1, 2, 3, 5, 6 done; milestone 7 tools ready (waiting on MAME reference frames) (milestone 4 unit tests deferred).
 
 ## Done
 - ROM set verified against MAME master (futaribl block identical to 0.289): all 4 SHA1s OK.
@@ -57,14 +57,20 @@
   attract "Today's Original Ranking" screen, visually correct (raw unrotated buffer, game is ROT270).
   Longer runs find new code: rerun tools/build_game.sh to compile recorded misses.
 
-## Next (milestone 7: frame checker vs MAME)
-1. Input scripting in run_headless (`--input file`: frame-numbered port C/D/L states) to coin up/start.
-2. Reference frames from MAME 0.289: ask the user to run in a MAME folder with the futaribl set:
-   `mame futaribl -window -nothrottle -snapname %g/%i -snapshot_directory snaps` and press F12 at
-   points, OR better: a small MAME Lua script (autoboot_script) that saves a snapshot every N frames
-   with the same input script, then send me the PNGs (staged from F:\claude2\fbl). Snapshot = 320x240
-   (check MAME's -snapsize / ROT270 rotation: use `-norotate` so it matches our raw buffer).
-3. tools/frame_check.py: compare our PNGs vs MAME PNGs per frame, report first mismatching frame,
-   pixel count and a diff image. Expect frame-number offsets (MAME frame 0 vs our boot): align on a
-   distinctive frame.
-4. Then milestone 8 (Vulkan renderer, verified against blit_ref) or 9 (audio), user's choice.
+- **Milestone 7 tools**: `run_headless --input script [--frame-offset K]` (script lines
+  `start_frame duration TOKEN...`, tokens COIN1 START1 UP DOWN LEFT RIGHT B1-B4, P2_*, SERVICE, TEST;
+  script frames are MAME frame numbers, ours = MAME - K), `--png-range from to`.
+  `tools/mame/capture.lua` + `capture.bat`: MAME autoboot script applying the same script and saving
+  `snaps/futaribl/f_NNNNN.png` (-norotate = raw buffer). `tools/frame_check.py ours mame [--diff x.png]`
+  finds the offset by exact frame hashes, counts identical aligned frames, reports first mismatch.
+  Self-test (our frames renumbered +25) passes: offset 25 found, 61/61 identical.
+  Input test: COIN1 at 1900, START1 at 1960 reaches the Character Select screen.
+
+## Next
+1. User runs in their MAME 0.289 folder (with roms/futaribl): copy tools/mame/capture.lua and
+   capture.bat there, run `capture.bat 1500 2100 1` (attract, no inputs), copy `snaps\futaribl` to
+   `F:\claude2\fbl\mame_snaps_attract`. Then stage those PNGs, generate ours with
+   `--png dir 1 --png-range 1400 2200`, run frame_check.py, fix mismatches (blitter math, timing of
+   loading, scroll timing at vsync).
+2. With the offset known, second capture with an input script (coin/start/play) to compare gameplay.
+3. Then milestone 8 (Vulkan renderer checked against blit_ref) or 9 (YMZ770 audio).
