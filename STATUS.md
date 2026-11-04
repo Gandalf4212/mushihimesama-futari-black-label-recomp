@@ -76,8 +76,16 @@
   frame_check.py assumes one global offset, so it reports the 290-offset frames as mismatches;
   add a per-frame best-match mode (ad hoc check is in the session log: hash lookup per MAME frame).
 
+- `frame_check.py --per-frame` added (drift curve; confirms single +3 drift before MAME frame 2000).
+- Decision (user): **target MAME timing for now**, fine-tune against the real PCB later.
+  Design written: `docs/timing.md` (port of MAME sh7709s.cpp cache/memory penalty model; hooks in bus
+  callbacks + per-instruction fetch in generated code; `--timing exact|fast|off`).
+
 ## Next
-1. frame_check.py `--per-frame`: for each MAME frame report the matching our-frame (drift curve).
+1. Milestone 10 implementation per docs/timing.md. Files to read first (stage from
+   F:\claude2\fbl\mame-mame0289\src\devices\cpu\sh\): `sh7709s.h` (cache constants), `sh_fe.cpp`
+   (per-opcode base cycles), and grep sh3comn.cpp for WCR1/WCR2/MCR/BCR2 addresses. sh7709s.cpp is
+   already summarized in docs/timing.md.
 2. Gameplay comparison: input script with COIN1/START1/moves (MAME frame numbers), capture with
    `capture.bat 2600 3400 5 inputs.txt` in MAME, run ours with `--input inputs.txt --frame-offset 293`.
    Inputs land at different game states if loading drift differs; use attract-relative timing or

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compare our frames with MAME reference snapshots.
 
-Usage: frame_check.py <our_dir> <mame_dir> [--diff out.png]
+Usage: frame_check.py <our_dir> <mame_dir> [--diff out.png] [--per-frame]
   our_dir:  frame_NNNNN.png from run_headless --png (our frame numbers)
   mame_dir: f_NNNNN.png from tools/mame/capture.lua (MAME frame numbers)
 Finds the frame offset by matching exact pixel hashes, then reports how many aligned frames match
@@ -61,6 +61,17 @@ def main():
             offsets[k - ok] = offsets.get(k - ok, 0) + 1
     if not offsets:
         print('no identical frames at any offset'); return 1
+    if '--per-frame' in sys.argv:
+        # drift curve: for each MAME frame, which of our frames is identical (offset = MAME - ours)
+        prev = None
+        for k in sorted(mame):
+            hits = oh.get(hashlib.sha1(data[('m', k)][2]).hexdigest(), [])
+            offs = sorted(k - o for o in hits)
+            near = min(offs, key=lambda x: abs(x - prev)) if offs and prev is not None else (offs[0] if offs else None)
+            flag = '' if near is not None else '   NO MATCH'
+            if near is not None and prev is not None and near != prev: flag = f'   drift {near - prev:+d}'
+            print(f'MAME {k:5d}: offset {near}{flag}')
+            if near is not None: prev = near
     off, cnt = max(offsets.items(), key=lambda kv: kv[1])
     print(f'best offset: MAME frame = our frame + {off}  ({cnt} identical frames at this offset)')
     first_bad = None; match = total = 0
