@@ -82,7 +82,7 @@ void sh3_step(SH3 *s)
     s->next_pc = pc + 2;
     s->has_slot = 0;
     sh3_ops[op](s, op);
-    s->insns++;
+    s->insns++; s->cycles++;
     if (s->has_slot) {
         uint32_t target = s->slot_target;
         s->pc = pc + 2;
@@ -90,7 +90,7 @@ void sh3_step(SH3 *s)
         s->has_slot = 0;
         s->next_pc = pc + 4;
         sh3_ops[op2](s, op2);
-        s->insns++;
+        s->insns++; s->cycles++;
         s->pc = target;
     } else {
         s->pc = s->next_pc;

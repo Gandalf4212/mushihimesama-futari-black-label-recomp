@@ -33,6 +33,8 @@ typedef struct SH3 {
     int sleeping;
     int trap;            /* TRAPA pending (imm + 1), handled by runtime */
     uint64_t insns;
+    uint64_t cycles;     /* instruction-count clock (timing model later) */
+    uint64_t event_at;   /* generated code returns to the dispatcher once cycles >= event_at */
     SH3Bus bus;
 } SH3;
 

@@ -1,6 +1,6 @@
 # Status
 
-**Last session:** Day 1 (2026-11-04). Milestones 1 and 2 done.
+**Last session:** Day 1 (2026-11-04). Milestones 1, 2 and 3 done.
 
 ## Done
 - ROM set verified against MAME master (futaribl block identical to 0.289): all 4 SHA1s OK.
@@ -20,18 +20,28 @@
   `./build/boot_runner <futaribli_u4> 800000 0C062FA0 build/ram.bin`
   (`build/` is gitignored; ram.bin is game data, never commit it).
 
-## Next (milestone 3: code discovery + C generator)
-1. `core/sh3/discover.py`: walk code from entry points (main entry, VBR+0x100/0x400/0x600 handlers,
-   bsr/jsr targets, jump tables like the IRQ dispatcher at 0x8C000600) over `build/ram.bin`; collect
-   functions and basic blocks; report indirect jumps (`jmp/jsr @Rn`, `braf/bsrf`) that need tables.
-2. `core/sh3/gen_c.py`: emit one C function per discovered function, reusing isa.py bodies; delay slots
-   inlined; indirect jumps through a dispatch table (address → function), with interpreter fallback for
-   any address not in the table (log it, so discovery can be improved).
-3. Test: generated code vs interpreter on the same boot/main-loop run (register + RAM compare).
-4. Then milestone 5 runtime: INTC/TMU, IRQ2 vsync, inputs, NAND reads, RTC9701.
-Read only `src/devices/cpu/sh/` on-chip peripheral files when the runtime needs them (check license).
+- **Milestone 3 (recompiler)**, see `docs/recompiler.md`:
+  `core/sh3/discover.py` (5,126 functions, 87,869 blocks, ~1 MB code for futaribl; pointer scan of the
+  whole image finds task/function-pointer tables), `core/sh3/gen_c.py` (98 MB of C in 35 files, compiles
+  in ~1.5 min on 2 cores at -O1), `core/runtime/dispatch.c` (direct table + interpreter fallback with
+  miss log), `core/runtime/lockstep_test.c`.
+  **Result:** 400M instructions after boot, recompiled == interpreter (all registers + all 8 MB RAM),
+  ending at the idle loop 0x0C05176A (waiting for vsync IRQ2, not implemented yet). 400M instructions
+  ≈ 4 s of real hardware time; test takes ~3 s including the interpreter run.
+  Only misses: cache routine run from uncached alias `0xAC002A54…` during startup (harmless).
+- One command: `tools/build_game.sh futaribl <rom_dir>` (verify, boot, discover, generate, compile,
+  lockstep). Outputs in `build/futaribl/` (gitignored).
 
-## Open questions
-- Timing/slowdown model (milestone 10).
-- Whether any code is copied/modified at runtime after boot (self-modifying or overlays): discovery
-  should check by comparing RAM code regions later in a run.
+## Next (milestone 5 runtime; milestone 4 instruction tests can be folded in)
+1. Instruction unit tests: random register/memory states, one instruction at a time, interpreter vs
+   generated single-instruction functions (catches bugs lockstep can't, since both share isa.py bodies
+   only the control-flow code differs; semantic bugs in isa.py need a second reference: compare a
+   sample against MAME's SH-3 core or the SH-3 manual).
+2. Runtime: SH7709S INTC (IRQ2 vsync at 60.0183806 Hz → INTEVT2 code for the vector table), TMU if used,
+   ports/inputs, NAND K9F1G08U0M command set (read ID, read page), RTC9701 serial EEPROM, blitter register
+   stubs. Read only the needed MAME files (`src/devices/cpu/sh/sh7709s*`, `sh3comn*`, `machine/nandflash*`,
+   `machine/rtc9701*`) and check their license headers.
+3. Goal: game runs past the idle loop, frame counter advances, NAND graphics load begins, blitter
+   command lists appear in RAM (ready for milestone 6 reference blitter).
+4. Fix the uncached-alias miss: dispatch should normalize alias for code addresses (already phys) -
+   investigate why 0xAC002A54 isn't a block start (probably a mid-function entry via literal 0xAC002A54).

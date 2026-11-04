@@ -60,6 +60,7 @@ static void wb(void *c, uint32_t a, uint8_t v) { Bus *b = c; uint8_t *m = map(b,
 static void ww(void *c, uint32_t a, uint16_t v) { Bus *b = c; uint8_t *m = map(b, a); if (m && (a & 0x1fffffffu) >= 0x00400000u) { m[0] = v >> 8; m[1] = v; } else if (!m) dev_write(b, a, v, 2); }
 static void wl(void *c, uint32_t a, uint32_t v) { Bus *b = c; uint8_t *m = map(b, a); if (m && (a & 0x1fffffffu) >= 0x00400000u) { m[0] = v >> 24; m[1] = v >> 16; m[2] = v >> 8; m[3] = v; } else if (!m) dev_write(b, a, v, 4); }
 
+#ifndef BOOT_RUNNER_NO_MAIN
 int main(int argc, char **argv)
 {
     if (argc < 5) { fprintf(stderr, "usage: %s u4 ram_size main_entry out.bin [max_insns]\n", argv[0]); return 2; }
@@ -98,3 +99,4 @@ int main(int argc, char **argv)
     }
     return reached ? 0 : 1;
 }
+#endif
