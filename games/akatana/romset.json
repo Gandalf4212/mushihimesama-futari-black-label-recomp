@@ -1,0 +1,57 @@
+{
+  "set": "akatana",
+  "note": "no GAME() entry in driver",
+  "regions": [
+    {
+      "region": "maincpu",
+      "size": 4194304,
+      "files": [
+        {
+          "name": "u4",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 0,
+          "size": 4194304,
+          "crc32": "613fd380",
+          "sha1": "6e28480eef3b483d00b42d811a9d2c7fa1097924"
+        }
+      ]
+    },
+    {
+      "region": "nand",
+      "size": 138412032,
+      "files": [
+        {
+          "name": "u2",
+          "load": "ROM_LOAD",
+          "offset": 0,
+          "size": 138412032,
+          "crc32": "89a2e1a5",
+          "sha1": "e6f4ec974406283665697fdd52bd606d0337dd11"
+        }
+      ]
+    },
+    {
+      "region": "ymz770",
+      "size": 8388608,
+      "files": [
+        {
+          "name": "u23",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 0,
+          "size": 4194304,
+          "crc32": "34a67e24",
+          "sha1": "78a7e82123b86311f1116a80c39f147b8b695549"
+        },
+        {
+          "name": "u24",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 4194304,
+          "size": 4194304,
+          "crc32": "10760fed",
+          "sha1": "b70f4506c00f3901ff38f5efd4b897af1afc7a0c"
+        }
+      ]
+    }
+  ],
+  "source": "MAME master@2026-11-04 (identical ROM data to 0.289) src/mame/cave/cv1k.cpp"
+}

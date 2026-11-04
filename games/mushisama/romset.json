@@ -1,0 +1,67 @@
+{
+  "set": "mushisama",
+  "year": 2004,
+  "parent": "mushisam",
+  "machine": "cv1k",
+  "inputs": "cv1k",
+  "init": "init_ibara",
+  "rotation": "ROT270",
+  "manufacturer": "Cave (AMI license)",
+  "description": "Mushihime-Sama (Japan, 2004/10/12 MASTER VER.)",
+  "regions": [
+    {
+      "region": "maincpu",
+      "size": 4194304,
+      "files": [
+        {
+          "name": "mushisama_u4",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 0,
+          "size": 2097152,
+          "crc32": "0b5b30b2",
+          "sha1": "35fd1bb1561c30b311b4325bc8f4628f2fccd20b",
+          "reload": [
+            2097152
+          ]
+        }
+      ]
+    },
+    {
+      "region": "nand",
+      "size": 138412032,
+      "files": [
+        {
+          "name": "mushisam_u2",
+          "load": "ROM_LOAD",
+          "offset": 0,
+          "size": 138412032,
+          "crc32": "4f0a842a",
+          "sha1": "33f3550ec676a7088b6348cd72c16cc6594afb84"
+        }
+      ]
+    },
+    {
+      "region": "ymz770",
+      "size": 8388608,
+      "files": [
+        {
+          "name": "u23",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 0,
+          "size": 4194304,
+          "crc32": "138e2050",
+          "sha1": "9e86489a4e65af5efb5495adf6d4b3e01d5b2816"
+        },
+        {
+          "name": "u24",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 4194304,
+          "size": 4194304,
+          "crc32": "e3d05c9f",
+          "sha1": "130c3d62317da1729c85bd178bd51500edd73ada"
+        }
+      ]
+    }
+  ],
+  "source": "MAME master@2026-11-04 (identical ROM data to 0.289) src/mame/cave/cv1k.cpp"
+}

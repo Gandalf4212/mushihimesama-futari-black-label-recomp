@@ -1,0 +1,57 @@
+{
+  "set": "ddpsdoj",
+  "note": "no GAME() entry in driver",
+  "regions": [
+    {
+      "region": "maincpu",
+      "size": 4194304,
+      "files": [
+        {
+          "name": "u4",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 0,
+          "size": 4194304,
+          "crc32": "e2a4411c",
+          "sha1": "f8b2b6326dd8eeae99b8b1ab2bd5a3f0b9c7f027"
+        }
+      ]
+    },
+    {
+      "region": "nand",
+      "size": 138412032,
+      "files": [
+        {
+          "name": "u2",
+          "load": "ROM_LOAD",
+          "offset": 0,
+          "size": 138412032,
+          "crc32": "668e4cd6",
+          "sha1": "da0b10865df3a3e46cf8a109ca88a551faba4483"
+        }
+      ]
+    },
+    {
+      "region": "ymz770",
+      "size": 8388608,
+      "files": [
+        {
+          "name": "u23",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 0,
+          "size": 4194304,
+          "crc32": "ac94801c",
+          "sha1": "cbcc6d5d89860bc961967e1d3b7c329adaf200c5"
+        },
+        {
+          "name": "u24",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 4194304,
+          "size": 4194304,
+          "crc32": "f593045b",
+          "sha1": "91b92870d0dd2a7817cb0059cc750e2393686f4c"
+        }
+      ]
+    }
+  ],
+  "source": "MAME master@2026-11-04 (identical ROM data to 0.289) src/mame/cave/cv1k.cpp"
+}

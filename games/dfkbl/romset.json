@@ -1,0 +1,64 @@
+{
+  "set": "dfkbl",
+  "year": 2010,
+  "parent": null,
+  "machine": "cv1k_d",
+  "inputs": "cv1k",
+  "init": "init_ddpdfk",
+  "rotation": "ROT270",
+  "manufacturer": "Cave",
+  "description": "DoDonPachi Dai-Fukkatsu Black Label (Japan, 2010/1/18 BLACK LABEL)",
+  "regions": [
+    {
+      "region": "maincpu",
+      "size": 4194304,
+      "files": [
+        {
+          "name": "u4",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 0,
+          "size": 4194304,
+          "crc32": "8092ca9d",
+          "sha1": "75e16cd7c8d0f9c715115ce12da5c245fbcd2416"
+        }
+      ]
+    },
+    {
+      "region": "nand",
+      "size": 138412032,
+      "files": [
+        {
+          "name": "u2",
+          "load": "ROM_LOAD",
+          "offset": 0,
+          "size": 138412032,
+          "crc32": "29f9d73a",
+          "sha1": "ed978ab5e3ad8c05e7778a91bfb5aaa17b0f72d9"
+        }
+      ]
+    },
+    {
+      "region": "ymz770",
+      "size": 8388608,
+      "files": [
+        {
+          "name": "u23",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 0,
+          "size": 4194304,
+          "crc32": "36d4093b",
+          "sha1": "4aed7e2f7c0d2c9bceeb110a9907d8d99d55f4c3"
+        },
+        {
+          "name": "u24",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 4194304,
+          "size": 4194304,
+          "crc32": "31f9eb0a",
+          "sha1": "322158779e969bb321241065dd49c1167b91ff6c"
+        }
+      ]
+    }
+  ],
+  "source": "MAME master@2026-11-04 (identical ROM data to 0.289) src/mame/cave/cv1k.cpp"
+}

@@ -1,0 +1,67 @@
+{
+  "set": "futari15a",
+  "year": 2006,
+  "parent": "futari15",
+  "machine": "cv1k",
+  "inputs": "cv1k",
+  "init": "init_pinkswts",
+  "rotation": "ROT270",
+  "manufacturer": "Cave (AMI license)",
+  "description": "Mushihime-Sama Futari Ver 1.5 (Japan, 2006/12/8 MASTER VER 1.54)",
+  "regions": [
+    {
+      "region": "maincpu",
+      "size": 4194304,
+      "files": [
+        {
+          "name": "futari15a_u4",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 0,
+          "size": 2097152,
+          "crc32": "a609cf89",
+          "sha1": "56752fae9f42fa852af8ee2eae79e25ec7f17953",
+          "reload": [
+            2097152
+          ]
+        }
+      ]
+    },
+    {
+      "region": "nand",
+      "size": 138412032,
+      "files": [
+        {
+          "name": "futari15_u2",
+          "load": "ROM_LOAD",
+          "offset": 0,
+          "size": 138412032,
+          "crc32": "b9eae1fc",
+          "sha1": "410f8e7cfcbfd271b41fb4f8d049a13a3191a1f9"
+        }
+      ]
+    },
+    {
+      "region": "ymz770",
+      "size": 8388608,
+      "files": [
+        {
+          "name": "u23",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 0,
+          "size": 4194304,
+          "crc32": "39f1e1f4",
+          "sha1": "53d12f59a56df35c705408c76e6e02118da656f1"
+        },
+        {
+          "name": "u24",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 4194304,
+          "size": 4194304,
+          "crc32": "c631a766",
+          "sha1": "8bb6934a2f5b8a9841c3dcf85192b1743773dd8b"
+        }
+      ]
+    }
+  ],
+  "source": "MAME master@2026-11-04 (identical ROM data to 0.289) src/mame/cave/cv1k.cpp"
+}

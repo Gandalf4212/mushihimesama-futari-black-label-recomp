@@ -1,0 +1,64 @@
+{
+  "set": "ddpdfk",
+  "year": 2008,
+  "parent": null,
+  "machine": "cv1k_d",
+  "inputs": "cv1k",
+  "init": "init_ddpdfk",
+  "rotation": "ROT270",
+  "manufacturer": "Cave (AMI license)",
+  "description": "DoDonPachi Dai-Fukkatsu Ver 1.5 (Japan, 2008/06/23 MASTER VER 1.5)",
+  "regions": [
+    {
+      "region": "maincpu",
+      "size": 4194304,
+      "files": [
+        {
+          "name": "ddpdfk_u4",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 0,
+          "size": 4194304,
+          "crc32": "9976d699",
+          "sha1": "9dfe9d1daf6f638cafce8cdc5230209e2bcb7522"
+        }
+      ]
+    },
+    {
+      "region": "nand",
+      "size": 138412032,
+      "files": [
+        {
+          "name": "ddpdfk_u2",
+          "load": "ROM_LOAD",
+          "offset": 0,
+          "size": 138412032,
+          "crc32": "84a51a4f",
+          "sha1": "291a6279c0746d2eb8630e7d6d886043f0cfdd94"
+        }
+      ]
+    },
+    {
+      "region": "ymz770",
+      "size": 8388608,
+      "files": [
+        {
+          "name": "u23",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 0,
+          "size": 4194304,
+          "crc32": "27032cde",
+          "sha1": "5b58d0140d72b91db4e763ca4af93060d36ac74d"
+        },
+        {
+          "name": "u24",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 4194304,
+          "size": 4194304,
+          "crc32": "a6178c2c",
+          "sha1": "7742ad1de2e4b0d0206ad11d467ea35da36352df"
+        }
+      ]
+    }
+  ],
+  "source": "MAME master@2026-11-04 (identical ROM data to 0.289) src/mame/cave/cv1k.cpp"
+}

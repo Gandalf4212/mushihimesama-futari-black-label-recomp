@@ -1,0 +1,67 @@
+{
+  "set": "deathsml",
+  "year": 2007,
+  "parent": null,
+  "machine": "cv1k",
+  "inputs": "cv1k",
+  "init": "init_deathsml",
+  "rotation": "ROT0",
+  "manufacturer": "Cave (AMI license)",
+  "description": "Deathsmiles (Japan, 2007/10/09 MASTER VER)",
+  "regions": [
+    {
+      "region": "maincpu",
+      "size": 4194304,
+      "files": [
+        {
+          "name": "u4",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 0,
+          "size": 2097152,
+          "crc32": "1a7b98bf",
+          "sha1": "07798a4a846e5802756396b34df47d106895c1f1",
+          "reload": [
+            2097152
+          ]
+        }
+      ]
+    },
+    {
+      "region": "nand",
+      "size": 138412032,
+      "files": [
+        {
+          "name": "u2",
+          "load": "ROM_LOAD",
+          "offset": 0,
+          "size": 138412032,
+          "crc32": "59ef5d78",
+          "sha1": "426e506b6d88948aa55aec71c0db6e91da3d490d"
+        }
+      ]
+    },
+    {
+      "region": "ymz770",
+      "size": 8388608,
+      "files": [
+        {
+          "name": "u23",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 0,
+          "size": 4194304,
+          "crc32": "aab718c8",
+          "sha1": "0e636c46d06151abd6f73232bc479dafcafe5327"
+        },
+        {
+          "name": "u24",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 4194304,
+          "size": 4194304,
+          "crc32": "83881d84",
+          "sha1": "6e2294b247dfcbf0ced155dc45c706f29052775d"
+        }
+      ]
+    }
+  ],
+  "source": "MAME master@2026-11-04 (identical ROM data to 0.289) src/mame/cave/cv1k.cpp"
+}

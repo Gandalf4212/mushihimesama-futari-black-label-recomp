@@ -1,0 +1,67 @@
+{
+  "set": "mushitam",
+  "year": 2005,
+  "parent": null,
+  "machine": "cv1k",
+  "inputs": "cv1k",
+  "init": "init_mushitam",
+  "rotation": "ROT0",
+  "manufacturer": "Cave (AMI license)",
+  "description": "Puzzle! Mushihime-Tama (Japan, 2005/09/09.MASTER VER)",
+  "regions": [
+    {
+      "region": "maincpu",
+      "size": 4194304,
+      "files": [
+        {
+          "name": "mushitam_u4",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 0,
+          "size": 2097152,
+          "crc32": "c49eb6b1",
+          "sha1": "c40ee5de89e3f1cb49ac19687657dd2b42a88d81",
+          "reload": [
+            2097152
+          ]
+        }
+      ]
+    },
+    {
+      "region": "nand",
+      "size": 138412032,
+      "files": [
+        {
+          "name": "mushitam_u2",
+          "load": "ROM_LOAD",
+          "offset": 0,
+          "size": 138412032,
+          "crc32": "8ba498ab",
+          "sha1": "459c0b4ab831bbe019bdd5b0ac56955948b9e3a6"
+        }
+      ]
+    },
+    {
+      "region": "ymz770",
+      "size": 8388608,
+      "files": [
+        {
+          "name": "u23",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 0,
+          "size": 4194304,
+          "crc32": "701a912a",
+          "sha1": "85c198946fb693d99928ea2595c84ba4d9dc8157"
+        },
+        {
+          "name": "u24",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 4194304,
+          "size": 4194304,
+          "crc32": "6feeb9a1",
+          "sha1": "992711c80e660c32f97b343c2ce8184fddd7364e"
+        }
+      ]
+    }
+  ],
+  "source": "MAME master@2026-11-04 (identical ROM data to 0.289) src/mame/cave/cv1k.cpp"
+}

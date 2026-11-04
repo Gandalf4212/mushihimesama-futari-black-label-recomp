@@ -1,0 +1,67 @@
+{
+  "set": "pinkswtsa",
+  "year": 2006,
+  "parent": "pinkswts",
+  "machine": "cv1k",
+  "inputs": "cv1ks",
+  "init": "init_pinkswts",
+  "rotation": "ROT270",
+  "manufacturer": "Cave (AMI license)",
+  "description": "Pink Sweets: Ibara Sorekara (Japan, 2006/04/06 MASTER VER...)",
+  "regions": [
+    {
+      "region": "maincpu",
+      "size": 4194304,
+      "files": [
+        {
+          "name": "pnkswtsa_u4",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 0,
+          "size": 2097152,
+          "crc32": "ee3339b2",
+          "sha1": "995988d370731a7074b49ce8752525dadf06a954",
+          "reload": [
+            2097152
+          ]
+        }
+      ]
+    },
+    {
+      "region": "nand",
+      "size": 138412032,
+      "files": [
+        {
+          "name": "pnkswtsa_u2",
+          "load": "ROM_LOAD",
+          "offset": 0,
+          "size": 138412032,
+          "crc32": "829a862e",
+          "sha1": "8c0ee2a0eb33b68869252fd68aed74820a904287"
+        }
+      ]
+    },
+    {
+      "region": "ymz770",
+      "size": 8388608,
+      "files": [
+        {
+          "name": "u23",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 0,
+          "size": 4194304,
+          "crc32": "4b82d250",
+          "sha1": "ee98dbc3f791efb6d58f3945bcb2044667ae7978"
+        },
+        {
+          "name": "u24",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 4194304,
+          "size": 4194304,
+          "crc32": "e93f0627",
+          "sha1": "6f5ec0ade87f7fc42a58a8f125557a4d1f3f187d"
+        }
+      ]
+    }
+  ],
+  "source": "MAME master@2026-11-04 (identical ROM data to 0.289) src/mame/cave/cv1k.cpp"
+}

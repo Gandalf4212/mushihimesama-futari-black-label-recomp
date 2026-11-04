@@ -1,0 +1,67 @@
+{
+  "set": "mmpork",
+  "year": 2007,
+  "parent": null,
+  "machine": "cv1k",
+  "inputs": "cv1ks",
+  "init": "init_pinkswts",
+  "rotation": "ROT270",
+  "manufacturer": "Cave (AMI license)",
+  "description": "Muchi Muchi Pork! (Japan, 2007/ 4/17 MASTER VER.)",
+  "regions": [
+    {
+      "region": "maincpu",
+      "size": 4194304,
+      "files": [
+        {
+          "name": "u4",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 0,
+          "size": 2097152,
+          "crc32": "d06cfa42",
+          "sha1": "5707feb4b3e5265daf5926f38c38612b24106f1f",
+          "reload": [
+            2097152
+          ]
+        }
+      ]
+    },
+    {
+      "region": "nand",
+      "size": 138412032,
+      "files": [
+        {
+          "name": "u2",
+          "load": "ROM_LOAD",
+          "offset": 0,
+          "size": 138412032,
+          "crc32": "1ee961b8",
+          "sha1": "81a2eba704ac1cf7fc44fa7c6a3f50e3570c104f"
+        }
+      ]
+    },
+    {
+      "region": "ymz770",
+      "size": 8388608,
+      "files": [
+        {
+          "name": "u23",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 0,
+          "size": 4194304,
+          "crc32": "4a4b36df",
+          "sha1": "5db5ce6fa47e5ca3263d4bd19315890c6d29df66"
+        },
+        {
+          "name": "u24",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 4194304,
+          "size": 4194304,
+          "crc32": "ce83d07b",
+          "sha1": "a5947467c8f5b7c4b0ad8e32df2ee29b787e355f"
+        }
+      ]
+    }
+  ],
+  "source": "MAME master@2026-11-04 (identical ROM data to 0.289) src/mame/cave/cv1k.cpp"
+}

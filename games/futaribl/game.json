@@ -1,0 +1,16 @@
+{
+  "set": "futaribl",
+  "title": "Mushihime-Sama Futari Black Label - Another Ver (World, 2009/11/27 INTERNATIONAL BL)",
+  "board": "CV1000-B",
+  "ram_size": "0x800000",
+  "rotation": "ROT270",
+  "default_display": "yoko",
+  "boot": {
+    "reset_pc": "0xA0000000",
+    "rom_copy": { "src": "0x000000", "dst": "0x0C000000", "size": "0x51000" },
+    "unpack_call": { "pc": "0x0C002AC4", "r4": "0xAC051000", "r5": "0xA0051000" },
+    "vbr": "0x8C000000",
+    "main_entry": "0x0C062FA0"
+  },
+  "idle": { "pc": "0x0C05176A", "ram_var": "0x0C002310", "mame_init": "init_pinkswts" }
+}

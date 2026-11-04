@@ -1,0 +1,64 @@
+{
+  "set": "dsmbl",
+  "year": 2008,
+  "parent": null,
+  "machine": "cv1k_d",
+  "inputs": "cv1k",
+  "init": "init_ddpdfk",
+  "rotation": "ROT0",
+  "manufacturer": "Cave (AMI license)",
+  "description": "Deathsmiles MegaBlack Label (Japan, 2008/10/06 MEGABLACK LABEL VER)",
+  "regions": [
+    {
+      "region": "maincpu",
+      "size": 4194304,
+      "files": [
+        {
+          "name": "u4",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 0,
+          "size": 4194304,
+          "crc32": "77fc5ad1",
+          "sha1": "afe044fc16e9494143c876879b033caccd08cf22"
+        }
+      ]
+    },
+    {
+      "region": "nand",
+      "size": 138412032,
+      "files": [
+        {
+          "name": "u2",
+          "load": "ROM_LOAD",
+          "offset": 0,
+          "size": 138412032,
+          "crc32": "d6b85b7a",
+          "sha1": "4674f6ad07f6a03904ca3d05060816b8fe061add"
+        }
+      ]
+    },
+    {
+      "region": "ymz770",
+      "size": 8388608,
+      "files": [
+        {
+          "name": "u23",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 0,
+          "size": 4194304,
+          "crc32": "a9536a6a",
+          "sha1": "4b9dcaf6803b1fcfdf73ae9daabc4508fec71631"
+        },
+        {
+          "name": "u24",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 4194304,
+          "size": 4194304,
+          "crc32": "3b673326",
+          "sha1": "1ae847eb4e752fef1d72081d82344f0ad0537c31"
+        }
+      ]
+    }
+  ],
+  "source": "MAME master@2026-11-04 (identical ROM data to 0.289) src/mame/cave/cv1k.cpp"
+}

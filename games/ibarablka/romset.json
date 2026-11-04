@@ -1,0 +1,67 @@
+{
+  "set": "ibarablka",
+  "year": 2006,
+  "parent": "ibarablk",
+  "machine": "cv1k",
+  "inputs": "cv1ks",
+  "init": "init_pinkswts",
+  "rotation": "ROT270",
+  "manufacturer": "Cave (AMI license)",
+  "description": "Ibara Kuro Black Label (Japan, 2006/02/06 MASTER VER.)",
+  "regions": [
+    {
+      "region": "maincpu",
+      "size": 4194304,
+      "files": [
+        {
+          "name": "ibarablka_u4",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 0,
+          "size": 2097152,
+          "crc32": "a9d43839",
+          "sha1": "507696e616608c05893c7ac2814b3365e9cb0720",
+          "reload": [
+            2097152
+          ]
+        }
+      ]
+    },
+    {
+      "region": "nand",
+      "size": 138412032,
+      "files": [
+        {
+          "name": "ibarablka_u2",
+          "load": "ROM_LOAD",
+          "offset": 0,
+          "size": 138412032,
+          "crc32": "33400d96",
+          "sha1": "09c22b5431ac3726bf88c56efd970f56793f825a"
+        }
+      ]
+    },
+    {
+      "region": "ymz770",
+      "size": 8388608,
+      "files": [
+        {
+          "name": "u23",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 0,
+          "size": 4194304,
+          "crc32": "a436bb22",
+          "sha1": "0556e771cc02638bf8814315ba671c2d442594f1"
+        },
+        {
+          "name": "u24",
+          "load": "ROM_LOAD16_WORD_SWAP",
+          "offset": 4194304,
+          "size": 4194304,
+          "crc32": "d11ab6b6",
+          "sha1": "2132191cbe847e2560423e4545c969f21f8ff825"
+        }
+      ]
+    }
+  ],
+  "source": "MAME master@2026-11-04 (identical ROM data to 0.289) src/mame/cave/cv1k.cpp"
+}
