@@ -4,6 +4,7 @@
 #ifndef CV1K_H
 #define CV1K_H
 #include "../sh3/sh3.h"
+#include "timing.h"
 
 #define CV1K_FRAME_HZ 60.0183806291
 #define CV1K_CPU_HZ   102400000.0
@@ -42,6 +43,7 @@ typedef struct CV1K {
     uint8_t onchip[0x10000];                /* 0xFFFF0000-0xFFFFFFFF */
     uint8_t area1[0x10000];                 /* 0x04000000-0x0400FFFF (INTC2, ports) */
     Nand nand; Rtc9701 rtc; Blitter blit; Inputs in;
+    Timing tm; int timing_on, dma_active;
     int irq2_pending;
     uint32_t dma_irq_pending; uint64_t dma_bytes, dma_count;
     uint64_t frame, irqs_taken, sound_writes;
@@ -52,6 +54,7 @@ typedef struct CV1K {
 
 int  cv1k_init(CV1K *m, const char *u4, const char *u2, uint32_t ram_size);
 void cv1k_reset(CV1K *m);
+void cv1k_set_timing(CV1K *m, int on);   /* MAME 0.289 cache/bus model on/off */
 /* Take a pending interrupt if allowed. Returns 1 if taken. Call only at dispatch boundaries. */
 int  cv1k_check_irq(CV1K *m);
 /* Signal vsync (IRQ2 assert) and advance the frame counter. */

@@ -242,13 +242,14 @@ static void dmac_kick(CV1K *m, int ch)
     int sz = sizes[(chcr >> 3) & 3];
     int sm = (chcr >> 12) & 3, dm = (chcr >> 14) & 3;
     int sinc = sm == 1 ? sz : sm == 2 ? -sz : 0, dinc = dm == 1 ? sz : dm == 2 ? -sz : 0;
+    m->dma_active = 1;
     for (uint32_t i = 0; i < n; i++) {
         if (sz == 1) bus_wb(m, dar, bus_rb(m, sar));
         else if (sz == 2) bus_ww(m, dar, bus_rw(m, sar));
         else for (int k = 0; k < sz; k += 4) bus_wl(m, dar + (dinc ? k : 0), bus_rl(m, sar + (sinc ? k : 0)));
         sar += sinc; dar += dinc;
     }
-    m->dma_bytes += (uint64_t)n * sz; m->dma_count++;
+    m->dma_bytes += (uint64_t)n * sz; m->dma_count++; m->dma_active = 0;
     a1_set32(m, base, sar); a1_set32(m, base + 4, dar); a1_set32(m, base + 8, 0);
     a1_set32(m, base + 0xC, chcr | 2);                                /* TE */
     if (chcr & 4) m->dma_irq_pending |= 1 << ch;                       /* IE: DEI interrupt (not routed yet) */
@@ -270,34 +271,56 @@ static void port_out(CV1K *m, uint32_t p, uint32_t v)
     }
 }
 
+#define TM(m, a, w) do { if ((m)->timing_on && !(m)->dma_active) (m)->cpu.cycles += tm_data(&(m)->tm, (a), (w)); } while (0)
+
+static void onchip_written(CV1K *m, uint32_t a, uint32_t v)
+{
+    if (!m->timing_on) return;
+    if (a >= 0xF0000000u && a < 0xF1000000u) { tm_cache_array_write(&m->tm, a - 0xF0000000u, v); m->cpu.cycles += m->tm.pending_cycles; m->tm.pending_cycles = 0; }
+    else if (a == 0xFFFFFFECu) tm_ccr_write(&m->tm, v);
+}
+
+static uint16_t bus_fetch(void *c, uint32_t a)
+{
+    CV1K *m = c; uint8_t *q = plain(m, a); return q ? (uint16_t)(q[0] << 8 | q[1]) : 0;
+}
+
+static uint32_t fetch_hook(void *c, uint32_t pc, uint16_t op)
+{
+    CV1K *m = c;
+    uint32_t extra = tm_base_cycles(op) - 1;
+    if (tm_fetch_charged(op)) extra += tm_fetch(&m->tm, pc);
+    return extra;
+}
+
 static uint8_t bus_rb(void *c, uint32_t a)
 {
-    CV1K *m = c; int hit; uint32_t v = port_in(m, P(a), &hit); if (hit) return v;
+    CV1K *m = c; TM(m, a, 0); int hit; uint32_t v = port_in(m, P(a), &hit); if (hit) return v;
     uint8_t *q = plain(m, a); return q ? *q : dev_read(m, a, 1);
 }
 static uint16_t bus_rw(void *c, uint32_t a)
 {
-    CV1K *m = c; uint8_t *q = plain(m, a); return q ? (uint16_t)(q[0] << 8 | q[1]) : dev_read(m, a, 2);
+    CV1K *m = c; TM(m, a, 0); uint8_t *q = plain(m, a); return q ? (uint16_t)(q[0] << 8 | q[1]) : dev_read(m, a, 2);
 }
 static uint32_t bus_rl(void *c, uint32_t a)
 {
-    CV1K *m = c; uint8_t *q = plain(m, a);
+    CV1K *m = c; TM(m, a, 0); uint8_t *q = plain(m, a);
     return q ? (uint32_t)q[0] << 24 | q[1] << 16 | q[2] << 8 | q[3] : dev_read(m, a, 4);
 }
 static void bus_wb(void *c, uint32_t a, uint8_t v)
 {
-    CV1K *m = c; uint8_t *q = plain(m, a);
+    CV1K *m = c; TM(m, a, 1); uint8_t *q = plain(m, a);
     if (q && P(a) >= 0x00400000u) { *q = v; if (P(a) >= 0x04000120u && P(a) < 0x04000140u) port_out(m, P(a), v); else if ((P(a) & 0xFFFF0000u) == 0x04000000u) area1_written(m, P(a)); }
     else if (!q) dev_write(m, a, v, 1);
 }
 static void bus_ww(void *c, uint32_t a, uint16_t v)
 {
-    CV1K *m = c; uint8_t *q = plain(m, a);
+    CV1K *m = c; TM(m, a, 1); uint8_t *q = plain(m, a);
     if (q && P(a) >= 0x00400000u) { q[0] = v >> 8; q[1] = v; if ((P(a) & 0xFFFF0000u) == 0x04000000u) area1_written(m, P(a)); } else if (!q) dev_write(m, a, v, 2);
 }
 static void bus_wl(void *c, uint32_t a, uint32_t v)
 {
-    CV1K *m = c; uint8_t *q = plain(m, a);
+    CV1K *m = c; TM(m, a, 1); if (a >= 0xF0000000u) onchip_written(m, a, v); uint8_t *q = plain(m, a);
     if (q && P(a) >= 0x00400000u) { q[0] = v >> 24; q[1] = v >> 16; q[2] = v >> 8; q[3] = v; if ((P(a) & 0xFFFF0000u) == 0x04000000u) area1_written(m, P(a)); } else if (!q) dev_write(m, a, v, 4);
 }
 
@@ -355,9 +378,17 @@ int cv1k_init(CV1K *m, const char *u4, const char *u2, uint32_t ram_size)
     for (int i = 0; i < 256; i++) m->rtc.eeprom[i] = 0xFFFF;
     m->in = (Inputs){0xFF, 0xFF, 0xFF, 0xFF, 0};
     m->cycles_per_frame = (uint64_t)(CV1K_CPU_HZ / CV1K_FRAME_HZ);
-    m->cpu.bus = (SH3Bus){m, bus_rb, bus_rw, bus_rl, bus_wb, bus_ww, bus_wl};
+    m->cpu.bus = (SH3Bus){m, bus_rb, bus_rw, bus_rl, bus_wb, bus_ww, bus_wl, bus_fetch};
+    tm_init(&m->tm, m->onchip);
+    cv1k_set_timing(m, 1);
     cv1k_reset(m);
     return 1;
+}
+
+void cv1k_set_timing(CV1K *m, int on)
+{
+    m->timing_on = on;
+    m->cpu.fetch_hook = on ? fetch_hook : 0;
 }
 
 void cv1k_reset(CV1K *m)

@@ -20,6 +20,7 @@ typedef struct SH3Bus {
     void (*wb)(void *ctx, uint32_t a, uint8_t v);
     void (*ww)(void *ctx, uint32_t a, uint16_t v);
     void (*wl)(void *ctx, uint32_t a, uint32_t v);
+    uint16_t (*fetch16)(void *ctx, uint32_t a);   /* opcode fetch without data timing (optional) */
 } SH3Bus;
 
 typedef struct SH3 {
@@ -34,7 +35,9 @@ typedef struct SH3 {
     int trap;            /* TRAPA pending (imm + 1), handled by runtime */
     uint64_t insns;
     uint64_t cycles;     /* instruction-count clock (timing model later) */
-    uint64_t event_at;   /* generated code returns to the dispatcher once cycles >= event_at */
+    uint64_t event_at;
+    /* timing hook, called before each executed instruction: returns extra cycles (base-1 + fetch penalty) */
+    uint32_t (*fetch_hook)(void *ctx, uint32_t pc, uint16_t op);   /* generated code returns to the dispatcher once cycles >= event_at */
     SH3Bus bus;
 } SH3;
 

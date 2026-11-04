@@ -21,9 +21,9 @@ void sh3_set_sr(SH3 *s, uint32_t v)
 
 void sh3_reset(SH3 *s)
 {
-    SH3Bus bus = s->bus;
+    SH3Bus bus = s->bus; uint32_t (*hook)(void *, uint32_t, uint16_t) = s->fetch_hook;
     memset(s, 0, sizeof *s);
-    s->bus = bus;
+    s->bus = bus; s->fetch_hook = hook;
     s->pc = 0xA0000000u;
     s->vbr = 0;
     s->sr = 0x700000F0u; /* MD=1, RB=1, BL=1, IMASK=15 (bank already "1": registers start in r[]) */
@@ -78,7 +78,8 @@ void sh3_step(SH3 *s)
 {
     if (!ops_ready) { sh3_init_ops(); ops_ready = 1; }
     uint32_t pc = s->pc;
-    uint16_t op = RW(pc);
+    uint16_t op = s->bus.fetch16 ? s->bus.fetch16(s->bus.ctx, pc) : RW(pc);
+    if (s->fetch_hook) s->cycles += s->fetch_hook(s->bus.ctx, pc, op);
     s->next_pc = pc + 2;
     s->has_slot = 0;
     sh3_ops[op](s, op);
@@ -86,7 +87,8 @@ void sh3_step(SH3 *s)
     if (s->has_slot) {
         uint32_t target = s->slot_target;
         s->pc = pc + 2;
-        uint16_t op2 = RW(pc + 2);
+        uint16_t op2 = s->bus.fetch16 ? s->bus.fetch16(s->bus.ctx, pc + 2) : RW(pc + 2);
+        if (s->fetch_hook) s->cycles += s->fetch_hook(s->bus.ctx, pc + 2, op2);
         s->has_slot = 0;
         s->next_pc = pc + 4;
         sh3_ops[op2](s, op2);

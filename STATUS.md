@@ -1,6 +1,6 @@
 # Status
 
-**Last session:** Day 1 (2026-11-04). Milestones 1, 2, 3, 5, 6 done; milestone 7 first comparison done: rendering pixel-exact vs MAME (milestone 4 unit tests deferred).
+**Last session:** Day 1 (2026-11-04). Milestones 1, 2, 3, 5, 6 done; milestone 7 rendering pixel-exact vs MAME; milestone 10 timing model in (MAME 0.289 parity) (milestone 4 unit tests deferred).
 
 ## Done
 - ROM set verified against MAME master (futaribl block identical to 0.289): all 4 SHA1s OK.
@@ -81,14 +81,27 @@
   Design written: `docs/timing.md` (port of MAME sh7709s.cpp cache/memory penalty model; hooks in bus
   callbacks + per-instruction fetch in generated code; `--timing exact|fast|off`).
 
+- **Milestone 10 (timing, MAME 0.289 parity)**: `core/runtime/timing.c/.h` = port of sh7709s.cpp model:
+  16 KB 4-way LRU cache (16 B lines, regions 0xA…/0xE… uncached), access_penalty (burst SDRAM, wait
+  states from BCR2/WCR1/WCR2/MCR at 0xFFFFFF62/64/66/68, area switch, SDRAM page precharge, write-back
+  buffer), cache address array flush (0xF0000000), CCR clear (0xFFFFFFEC bit 3). MAME quirks kept:
+  fetch penalty only for opcode groups 0/4/F; accesses >= 0xE0000000 re-charge the previous data
+  address; base cycles from sh_fe.cpp (bt/bf 3, bra/bsr/rts/braf/bt-s/bf-s 2, rte 4, trapa 8, mac 3,
+  mul 2, tas 4, ldc.l sr 3, stc.l sr 2, sleep 3). DMA accesses are not charged. Note: MAME master adds
+  device-access charges (update_access_cycles) that 0.289 does not have - we follow 0.289.
+  Hooks: SH3.fetch_hook (per executed instruction, interpreter and generated code via SH3_FETCH),
+  bus.fetch16 (opcode fetch without data timing), bus accessors charge data penalties.
+  `run_headless --timing off` = old instruction-count clock. Boot now runs inside the frame clock
+  (frames counted from power-on like MAME): main entry reached at frame 100.
+  **Result:** all 26 sampled MAME frames (1500-2100) identical at a CONSTANT offset (MAME = ours - 68):
+  the +3 loading drift is gone. Remaining: 68-frame constant lag accumulated before MAME frame 1500
+  (boot / FPGA upload / memory check). Need early MAME frames to locate it (capture 0-1500 every 10).
+  Cost: build ~4 min (hooks double the C), ~100-200 fps headless.
+
 ## Next
-1. Milestone 10 implementation per docs/timing.md. Files to read first (stage from
-   F:\claude2\fbl\mame-mame0289\src\devices\cpu\sh\): `sh7709s.h` (cache constants), `sh_fe.cpp`
-   (per-opcode base cycles), and grep sh3comn.cpp for WCR1/WCR2/MCR/BCR2 addresses. sh7709s.cpp is
-   already summarized in docs/timing.md.
-2. Gameplay comparison: input script with COIN1/START1/moves (MAME frame numbers), capture with
-   `capture.bat 2600 3400 5 inputs.txt` in MAME, run ours with `--input inputs.txt --frame-offset 293`.
-   Inputs land at different game states if loading drift differs; use attract-relative timing or
-   start inputs after loading is complete (MAME frame >= 2000).
-3. Milestone 8 (Vulkan renderer checked against blit_ref), 9 (YMZ770 audio), 10 (timing/cache model to
-   remove the drift and reproduce slowdown).
+1. User: `capture.bat 1 1500 10` in MAME → copy `snaps\futaribl` to `F:\claude2\fbl\mame_snaps_boot`.
+   Then render ours 0-1600 every frame and use frame_check --per-frame to see where the 68 frames come
+   from (suspects: reset values of BCR2/WCR1/WCR2/MCR before the game writes them — MAME's device_reset
+   values; FPGA bitstream upload loop cost; uncached ROM fetches during boot).
+2. Gameplay capture with inputs; blitter busy-time model (cv1k_v m_blit_delay_ns) if gameplay drifts.
+3. Milestone 8 (Vulkan) / 9 (audio).

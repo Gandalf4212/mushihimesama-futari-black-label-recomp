@@ -57,9 +57,10 @@ int main(int argc, char **argv)
     if (!cv1k_init(&m, argv[1], argv[2], strtoul(argv[3], 0, 16))) return 1;
     uint32_t entry = strtoul(argv[4], 0, 16);
     uint64_t frames = strtoull(argv[5], 0, 10);
-    int interp = 0, report = 60; const char *misses = NULL, *pngdir = NULL; int png_every = 0; uint64_t png_from = 0, png_to = ~0ull;
+    int interp = 0, timing = 1, report = 60; const char *misses = NULL, *pngdir = NULL; int png_every = 0; uint64_t png_from = 0, png_to = ~0ull;
     for (int i = 6; i < argc; i++) {
         if (!strcmp(argv[i], "--interp")) interp = 1;
+        if (!strcmp(argv[i], "--timing") && i + 1 < argc) timing = strcmp(argv[++i], "off") != 0;
         if (!strcmp(argv[i], "--report") && i + 1 < argc) report = atoi(argv[++i]);
         if (!strcmp(argv[i], "--misses") && i + 1 < argc) misses = argv[++i];
         if (!strcmp(argv[i], "--input") && i + 1 < argc) load_inputs(argv[++i]);
@@ -70,8 +71,13 @@ int main(int argc, char **argv)
     SH3 *s = &m.cpu;
     g_m = &m; blit_ref_init(&g_blit); m.blit.on_exec = on_exec;
     static uint32_t fb[320 * 240];
-    while ((s->pc & 0x1FFFFFFFu) != (entry & 0x1FFFFFFFu)) sh3_step(s);     /* boot */
-    m.next_vsync = s->cycles + m.cycles_per_frame;
+    if (!timing) cv1k_set_timing(&m, 0);
+    m.next_vsync = m.cycles_per_frame;                                       /* frames count from power-on, like MAME */
+    while ((s->pc & 0x1FFFFFFFu) != (entry & 0x1FFFFFFFu)) {                 /* boot on the interpreter */
+        sh3_step(s);
+        if (s->cycles >= m.next_vsync) { cv1k_vsync(&m); m.next_vsync += m.cycles_per_frame; }
+    }
+    printf("boot reached main entry at frame %llu (cycle %llu)\n", (unsigned long long)m.frame, (unsigned long long)s->cycles);
     if (!interp) dispatch_init(m.ram_size);
     clock_t t0 = clock();
     uint64_t last_blit = 0, last_nand = 0;

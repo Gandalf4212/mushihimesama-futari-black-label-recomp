@@ -41,7 +41,7 @@ def fields(pat, op):
 def body_for(op, pc):
     """C statement block for a plain instruction at pc (no control flow)."""
     pat, mn, kind, body = ISA[TABLE[op]]
-    return f'{{ const uint32_t PC = hi | 0x{pc:08X}u; (void)PC; {fields(pat, op)} {body} }} /* {mn} */'
+    return f'{{ const uint32_t PC = hi | 0x{pc:08X}u; (void)PC; SH3_FETCH(0x{op:04X}u, PC); {fields(pat, op)} {body} }} /* {mn} */'
 
 
 class Gen:
@@ -88,6 +88,7 @@ class Gen:
                         break
                     continue
                 PCc = f'(hi | 0x{pc:08X}u)'
+                lines.append(f'SH3_FETCH(0x{op:04X}u, {PCc});')
                 tgt = static_target(ISA[idx], op, pc)
                 tgt = tgt & 0x1FFFFFFF if tgt is not None else None
                 r = (op >> 8) & 15
@@ -136,6 +137,7 @@ HEADER = '''/* GENERATED from the user's own ROM by core/sh3/gen_c.py. Do not co
 void sh3_miss(SH3 *s);
 void sh3_miss_at(SH3 *s, uint32_t pc);
 void sh3_bad_slot(SH3 *s, uint32_t pc);
+#define SH3_FETCH(op, pc) do { if (s->fetch_hook) s->cycles += s->fetch_hook(s->bus.ctx, (pc), (op)); } while (0)
 '''
 
 
