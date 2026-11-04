@@ -7,6 +7,7 @@
 
 #define S (s)
 #include "sh3_ops.h"
+#include "sh3_cycles.h"
 
 void sh3_set_sr(SH3 *s, uint32_t v)
 {
@@ -21,9 +22,9 @@ void sh3_set_sr(SH3 *s, uint32_t v)
 
 void sh3_reset(SH3 *s)
 {
-    SH3Bus bus = s->bus; uint32_t (*hook)(void *, uint32_t, uint16_t) = s->fetch_hook;
+    SH3Bus bus = s->bus; uint32_t (*hook)(void *, uint32_t, uint16_t) = s->fetch_hook; int acct = s->acct;
     memset(s, 0, sizeof *s);
-    s->bus = bus; s->fetch_hook = hook;
+    s->bus = bus; s->fetch_hook = hook; s->acct = acct;
     s->pc = 0xA0000000u;
     s->vbr = 0;
     s->sr = 0x700000F0u; /* MD=1, RB=1, BL=1, IMASK=15 (bank already "1": registers start in r[]) */
@@ -83,7 +84,11 @@ void sh3_step(SH3 *s)
     s->next_pc = pc + 2;
     s->has_slot = 0;
     sh3_ops[op](s, op);
-    s->insns++; s->cycles++;
+    s->insns++;
+    int cls = s->acct ? sh3_acct_class(op) : 0;
+    if (s->acct) { s->acc += sh3_base_cycles(op); if (cls == ACCT_FLUSH) { s->cycles += s->acc; s->acc = 0; } }
+    else s->cycles++;
+    if (cls == ACCT_COND && !s->has_slot && s->next_pc == pc + 2) s->acc = 0;          /* not taken: dropped */
     if (s->has_slot) {
         uint32_t target = s->slot_target;
         s->pc = pc + 2;
@@ -92,9 +97,12 @@ void sh3_step(SH3 *s)
         s->has_slot = 0;
         s->next_pc = pc + 4;
         sh3_ops[op2](s, op2);
-        s->insns++; s->cycles++;
+        s->insns++;
+        if (s->acct) { s->acc += sh3_base_cycles(op2); s->cycles += s->acc; s->acc = 0; }   /* taken delayed branch */
+        else s->cycles++;
         s->pc = target;
     } else {
+        if (s->acct && (cls == ACCT_END || (cls == ACCT_COND && s->next_pc != pc + 2))) { s->cycles += s->acc; s->acc = 0; }
         s->pc = s->next_pc;
     }
 }

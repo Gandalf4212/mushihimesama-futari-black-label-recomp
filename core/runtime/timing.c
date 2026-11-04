@@ -126,14 +126,18 @@ uint32_t tm_data(Timing *t, uint32_t a, int write)
 {
     /* MAME quirk: accesses at >= 0xE0000000 don't update arg0, so the previous address is charged */
     if (a < 0xE0000000u) t->last_arg0 = a;
-    return penalty(t, t->last_arg0, write);
+    uint32_t p = penalty(t, t->last_arg0, write);
+    t->st_data += p; t->st_n_data++; if (p) t->st_miss_data++; if (!cacheable(t->last_arg0)) t->st_unc_data++;
+    return p;
 }
 
 uint32_t tm_fetch(Timing *t, uint32_t pc)
 {
     if (t->wb_active > 0) { if (--t->wb_active == 0) t->precharge = tpc(t) * 2; }
     else if (t->precharge > 0) t->precharge--;
-    return penalty(t, pc, 0);
+    uint32_t p = penalty(t, pc, 0);
+    t->st_fetch += p; t->st_n_fetch++; if (p) t->st_miss_fetch++; if (!cacheable(pc)) t->st_unc_fetch++;
+    return p;
 }
 
 void tm_cache_array_write(Timing *t, uint32_t offset, uint32_t data)

@@ -48,6 +48,7 @@ static void apply_inputs(CV1K *m)
     m->in.c = ~c; m->in.d = ~d; m->in.l = ~l; m->in.f = ~ff;   /* active low */
 }
 
+static uint64_t dispatch_insns_estimate(SH3 *s) { (void)s; return 0; }
 static uint32_t ram32(CV1K *m, uint32_t a) { uint8_t *q = m->ram + (a - 0x0C000000u); return (uint32_t)q[0] << 24 | q[1] << 16 | q[2] << 8 | q[3]; }
 
 int main(int argc, char **argv)
@@ -57,9 +58,10 @@ int main(int argc, char **argv)
     if (!cv1k_init(&m, argv[1], argv[2], strtoul(argv[3], 0, 16))) return 1;
     uint32_t entry = strtoul(argv[4], 0, 16);
     uint64_t frames = strtoull(argv[5], 0, 10);
-    int interp = 0, timing = 1, report = 60; const char *misses = NULL, *pngdir = NULL; int png_every = 0; uint64_t png_from = 0, png_to = ~0ull;
+    int interp = 0, timing = 1, report = 60; uint64_t st_from = ~0ull, st_to = 0, st_c0 = 0, st_i0 = 0; Timing st0; const char *misses = NULL, *pngdir = NULL; int png_every = 0; uint64_t png_from = 0, png_to = ~0ull;
     for (int i = 6; i < argc; i++) {
         if (!strcmp(argv[i], "--interp")) interp = 1;
+        if (!strcmp(argv[i], "--tmstats") && i + 2 < argc) { st_from = strtoull(argv[++i], 0, 10); st_to = strtoull(argv[++i], 0, 10); }
         if (!strcmp(argv[i], "--timing") && i + 1 < argc) timing = strcmp(argv[++i], "off") != 0;
         if (!strcmp(argv[i], "--report") && i + 1 < argc) report = atoi(argv[++i]);
         if (!strcmp(argv[i], "--misses") && i + 1 < argc) misses = argv[++i];
@@ -89,6 +91,16 @@ int main(int argc, char **argv)
         if (s->trap) cv1k_take_trap(&m);
         if (s->cycles >= m.next_vsync) {
             cv1k_vsync(&m); m.next_vsync += m.cycles_per_frame; if (g_nev) apply_inputs(&m);
+            if (m.frame == st_from) { st0 = m.tm; st_c0 = s->cycles; st_i0 = s->insns + dispatch_insns_estimate(s); }
+            if (m.frame == st_to) {
+                Timing *t = &m.tm;
+                printf("timing stats frames %llu-%llu: cycles %llu | base extra %llu | data pen %llu (%llu acc, %llu miss, %llu uncached) | fetch pen %llu (%llu charged, %llu miss, %llu uncached)\n",
+                    (unsigned long long)st_from, (unsigned long long)st_to, (unsigned long long)(s->cycles - st_c0),
+                    (unsigned long long)(t->st_base - st0.st_base), (unsigned long long)(t->st_data - st0.st_data), (unsigned long long)(t->st_n_data - st0.st_n_data),
+                    (unsigned long long)(t->st_miss_data - st0.st_miss_data), (unsigned long long)(t->st_unc_data - st0.st_unc_data),
+                    (unsigned long long)(t->st_fetch - st0.st_fetch), (unsigned long long)(t->st_n_fetch - st0.st_n_fetch),
+                    (unsigned long long)(t->st_miss_fetch - st0.st_miss_fetch), (unsigned long long)(t->st_unc_fetch - st0.st_unc_fetch));
+            }
             if (pngdir && png_every && m.frame % png_every == 0 && m.frame >= png_from && m.frame <= png_to) {
                 char path[512]; snprintf(path, sizeof path, "%s/frame_%05llu.png", pngdir, (unsigned long long)m.frame);
                 blit_ref_frame(&g_blit, m.blit.scroll_x, m.blit.scroll_y, fb); png_write_rgb(path, fb, 320, 240);

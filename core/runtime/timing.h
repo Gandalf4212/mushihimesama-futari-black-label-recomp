@@ -8,6 +8,7 @@ typedef struct Timing {
     uint64_t pending_cycles;       /* charged by register-side effects (cache flush), added by caller */
     const uint8_t *onchip;         /* CPU on-chip registers (0xFFFF0000 + offset): BCR2/WCR1/WCR2/MCR */
     int enabled;
+    uint64_t st_data, st_fetch, st_base, st_n_data, st_n_fetch, st_miss_data, st_miss_fetch, st_unc_data, st_unc_fetch;
 } Timing;
 void tm_init(Timing *t, const uint8_t *onchip);
 uint32_t tm_data(Timing *t, uint32_t addr, int write);   /* data access penalty */

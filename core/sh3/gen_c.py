@@ -16,6 +16,41 @@ import json, os, struct, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from isa import ISA, build_decode_table, static_target
 
+FLUSH_FORMS = None
+
+def base_cycles(op):
+    s = op >> 12
+    if s == 0:
+        lo8 = op & 0xFF
+        if lo8 in (0x0B, 0x23): return 2
+        if lo8 == 0x1B: return 3
+        if lo8 == 0x2B: return 4
+        if op & 0xF == 7: return 2
+        if op & 0xF == 0xF: return 3
+        return 1
+    if s == 2: return 2 if op & 0xF in (0xE, 0xF) else 1
+    if s == 3: return 2 if op & 0xF in (5, 0xD) else 1
+    if s == 4:
+        if op & 0xF == 0xF: return 3
+        return {0x03: 2, 0x07: 3, 0x1B: 4}.get(op & 0xFF, 1)
+    if s == 8:
+        k = (op >> 8) & 0xF
+        return 3 if k in (9, 0xB) else 2 if k in (0xD, 0xF) else 1
+    if s in (0xA, 0xB): return 2
+    if s == 0xC: return 8 if (op >> 8) & 0xF == 3 else 1
+    return 1
+
+def is_flush(op):
+    g, lo, lo8 = op >> 12, op & 0xF, op & 0xFF
+    if g == 0: return lo in (4, 5, 6, 0xC, 0xD, 0xE)
+    if g in (1, 5, 9, 0xD): return True
+    if g in (2, 6): return lo <= 2 or 4 <= lo <= 6
+    if g == 4: return lo8 in (0x02, 0x12, 0x22, 0x03, 0x13, 0x23, 0x06, 0x16, 0x26, 0x07, 0x17, 0x27, 0x1B)
+    if g == 8: return (op >> 8) & 0xF in (0, 1, 4, 5)
+    if g == 0xC: k = (op >> 8) & 0xF; return k <= 2 or 4 <= k <= 6
+    return False
+
+
 RAM_BASE = 0x0C000000
 TABLE = build_decode_table()
 
@@ -41,7 +76,13 @@ def fields(pat, op):
 def body_for(op, pc):
     """C statement block for a plain instruction at pc (no control flow)."""
     pat, mn, kind, body = ISA[TABLE[op]]
-    return f'{{ const uint32_t PC = hi | 0x{pc:08X}u; (void)PC; SH3_FETCH(0x{op:04X}u, PC); {fields(pat, op)} {body} }} /* {mn} */'
+    return body_slot(op, pc, False)
+
+
+def body_slot(op, pc, in_slot):
+    pat, mn, kind, body = ISA[TABLE[op]]
+    acct = f'ACC({base_cycles(op)});' + ('' if in_slot or not is_flush(op) else ' FLUSH();')
+    return f'{{ const uint32_t PC = hi | 0x{pc:08X}u; (void)PC; SH3_FETCH(0x{op:04X}u, PC); {fields(pat, op)} {body} {acct} }} /* {mn} */'
 
 
 class Gen:
@@ -64,7 +105,7 @@ class Gen:
         idx = TABLE[op]
         if idx < 0 or ISA[idx][2] != 'op':
             return f'sh3_bad_slot(s, hi | 0x{pc:08X}u);'
-        return body_for(op, pc)
+        return body_slot(op, pc, True)
 
     def function(self, entry, blocks):
         blockset = set(blocks)
@@ -84,47 +125,48 @@ class Gen:
                 if kind == 'op':
                     lines.append(body_for(op, pc)); count += 1; pc += 2
                     if pc in blockset:
-                        lines.append(f'goto L_{pc:08X};')
+                        lines.append(f'FLUSH(); goto L_{pc:08X};')
                         break
                     continue
                 PCc = f'(hi | 0x{pc:08X}u)'
-                lines.append(f'SH3_FETCH(0x{op:04X}u, {PCc});')
+                lines.append(f'SH3_FETCH(0x{op:04X}u, {PCc}); ACC({base_cycles(op)});')
                 tgt = static_target(ISA[idx], op, pc)
                 tgt = tgt & 0x1FFFFFFF if tgt is not None else None
                 r = (op >> 8) & 15
                 if kind == 'cbr':
                     cond = 'T' if mn.startswith('bt') else '!T'
                     count += 1
-                    lines.append(f'if ({cond}) {self.goto(tgt, pc, blockset)}')
-                    lines.append(self.goto(pc + 2, pc, blockset))
+                    lines.append(f'if ({cond}) {{ FLUSH(); {self.goto(tgt, pc, blockset)} }}')
+                    lines.append('DROP(); ' + self.goto(pc + 2, pc, blockset))
                 elif kind == 'cbrs':
                     cond = 'T' if mn.startswith('bt') else '!T'
                     count += 2
-                    lines.append(f'{{ const int take = ({cond}) != 0; {self.slot(pc + 2)}')
-                    lines.append(f'  if (take) {self.goto(tgt, pc, blockset)} }}')
-                    lines.append(self.goto(pc + 4, pc, blockset))
+                    lines.append(f'{{ const int take = ({cond}) != 0; if (take) {{ {self.slot(pc + 2)} FLUSH(); {self.goto(tgt, pc, blockset)} }} }}')
+                    nxt = self.w16(pc + 2)
+                    plain = TABLE[nxt] >= 0 and ISA[TABLE[nxt]][2] == 'op'
+                    lines.append('DROP(); ' + (body_slot(nxt, pc + 2, False) + ' ' + self.goto(pc + 4, pc, blockset) if plain else self.goto(pc + 2, pc, blockset)))
                 else:
                     count += 2
                     if kind == 'br':
-                        lines.append(f'{self.slot(pc + 2)} {self.goto(tgt, pc, blockset)}')
+                        lines.append(f'{self.slot(pc + 2)} FLUSH(); {self.goto(tgt, pc, blockset)}')
                     elif kind == 'call':
-                        lines.append(f'PR = {PCc} + 4; {self.slot(pc + 2)} s->pc = hi | 0x{tgt:08X}u; return;')
+                        lines.append(f'PR = {PCc} + 4; {self.slot(pc + 2)} FLUSH(); s->pc = hi | 0x{tgt:08X}u; return;')
                     elif kind in ('icall', 'ijmp'):
                         t = f'{PCc} + 4 + s->r[{r}]' if mn.startswith(('braf', 'bsrf')) else f's->r[{r}]'
                         link = f'PR = {PCc} + 4; ' if kind == 'icall' else ''
-                        lines.append(f'{{ const uint32_t t = {t}; {link}{self.slot(pc + 2)} s->pc = t; return; }}')
+                        lines.append(f'{{ const uint32_t t = {t}; {link}{self.slot(pc + 2)} FLUSH(); s->pc = t; return; }}')
                     elif kind == 'ret':
-                        lines.append(f'{{ const uint32_t t = PR; {self.slot(pc + 2)} s->pc = t; return; }}')
+                        lines.append(f'{{ const uint32_t t = PR; {self.slot(pc + 2)} FLUSH(); s->pc = t; return; }}')
                     elif kind == 'rte':
-                        lines.append(f'{{ const uint32_t t = SPC; set_sr(SSR); {self.slot(pc + 2)} s->pc = t; return; }}')
+                        lines.append(f'{{ const uint32_t t = SPC; set_sr(SSR); {self.slot(pc + 2)} FLUSH(); s->pc = t; return; }}')
                     elif kind == 'trap':
                         count -= 1
-                        lines.append(f's->trap = {op & 0xFF} + 1; s->pc = {PCc} + 2; return;')
+                        lines.append(f'FLUSH(); s->trap = {op & 0xFF} + 1; s->pc = {PCc} + 2; return;')
                     elif kind == 'sleep':
                         count -= 1
-                        lines.append(f's->sleeping = 1; s->pc = {PCc} + 2; return;')
+                        lines.append(f'FLUSH(); s->sleeping = 1; s->pc = {PCc} + 2; return;')
                 break
-            out.append(f'L_{b:08X}: s->cycles += {count};')
+            out.append(f'L_{b:08X}: if (!s->acct) s->cycles += {count};')
             out += ['    ' + l for l in lines]
         out.append('}')
         return '\n'.join(out)
@@ -137,6 +179,9 @@ HEADER = '''/* GENERATED from the user's own ROM by core/sh3/gen_c.py. Do not co
 void sh3_miss(SH3 *s);
 void sh3_miss_at(SH3 *s, uint32_t pc);
 void sh3_bad_slot(SH3 *s, uint32_t pc);
+#define ACC(n) (s->acc += (n))
+#define FLUSH() do { if (s->acct) { s->cycles += s->acc; } s->acc = 0; } while (0)
+#define DROP() (s->acc = 0)
 #define SH3_FETCH(op, pc) do { if (s->fetch_hook) s->cycles += s->fetch_hook(s->bus.ctx, (pc), (op)); } while (0)
 '''
 

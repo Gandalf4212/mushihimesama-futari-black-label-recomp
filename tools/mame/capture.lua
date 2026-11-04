@@ -13,26 +13,26 @@ local EVERY = tonumber(os.getenv("CAP_EVERY") or "1")
 local EXIT  = tonumber(os.getenv("CAP_EXIT")  or tostring(TO + 1))
 local INPUT = os.getenv("CAP_INPUT")
 
+-- input tokens as MAME names them (per-player inputs carry a P1_/P2_ prefix)
 local map = {
-  SERVICE={"SERVICE1",0}, COIN1={"COIN1",0}, COIN2={"COIN2",0}, START1={"START1",0}, START2={"START2",0},
-  TEST={"SERVICE",0},
-  UP={"JOYSTICK_UP",0}, DOWN={"JOYSTICK_DOWN",0}, LEFT={"JOYSTICK_LEFT",0}, RIGHT={"JOYSTICK_RIGHT",0},
-  B1={"BUTTON1",0}, B2={"BUTTON2",0}, B3={"BUTTON3",0}, B4={"BUTTON4",0},
-  P2_UP={"JOYSTICK_UP",1}, P2_DOWN={"JOYSTICK_DOWN",1}, P2_LEFT={"JOYSTICK_LEFT",1}, P2_RIGHT={"JOYSTICK_RIGHT",1},
-  P2_B1={"BUTTON1",1}, P2_B2={"BUTTON2",1}, P2_B3={"BUTTON3",1}, P2_B4={"BUTTON4",1},
+  SERVICE="SERVICE1", COIN1="COIN1", COIN2="COIN2", START1="START1", START2="START2", TEST="SERVICE",
+  UP="P1_JOYSTICK_UP", DOWN="P1_JOYSTICK_DOWN", LEFT="P1_JOYSTICK_LEFT", RIGHT="P1_JOYSTICK_RIGHT",
+  B1="P1_BUTTON1", B2="P1_BUTTON2", B3="P1_BUTTON3", B4="P1_BUTTON4",
+  P2_UP="P2_JOYSTICK_UP", P2_DOWN="P2_JOYSTICK_DOWN", P2_LEFT="P2_JOYSTICK_LEFT", P2_RIGHT="P2_JOYSTICK_RIGHT",
+  P2_B1="P2_BUTTON1", P2_B2="P2_BUTTON2", P2_B3="P2_BUTTON3", P2_B4="P2_BUTTON4",
 }
 local fields_by_tok = {}
 local function field_for(tok)
   if fields_by_tok[tok] ~= nil then return fields_by_tok[tok] end
-  local spec = map[tok]; if not spec then return nil end
+  local name = map[tok]; if not name then return nil end
   local ioport = manager.machine.ioport
-  local want_type = ioport:token_to_input_type(spec[1])
+  local want_type, want_player = ioport:token_to_input_type(name)
   for _, port in pairs(ioport.ports) do
     for _, f in pairs(port.fields) do
-      if f.type == want_type and f.player == spec[2] then fields_by_tok[tok] = f; return f end
+      if f.type == want_type and f.player == (want_player or 0) then fields_by_tok[tok] = f; return f end
     end
   end
-  print("capture.lua: no field for " .. tok); fields_by_tok[tok] = false; return false
+  print("capture.lua: no field for " .. tok .. " (" .. name .. ")"); fields_by_tok[tok] = false; return false
 end
 
 local events = {}

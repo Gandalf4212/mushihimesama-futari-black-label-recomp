@@ -288,9 +288,7 @@ static uint16_t bus_fetch(void *c, uint32_t a)
 static uint32_t fetch_hook(void *c, uint32_t pc, uint16_t op)
 {
     CV1K *m = c;
-    uint32_t extra = tm_base_cycles(op) - 1;
-    if (tm_fetch_charged(op)) extra += tm_fetch(&m->tm, pc);
-    return extra;
+    return tm_fetch_charged(op) ? tm_fetch(&m->tm, pc) : 0;
 }
 
 static uint8_t bus_rb(void *c, uint32_t a)
@@ -389,6 +387,7 @@ void cv1k_set_timing(CV1K *m, int on)
 {
     m->timing_on = on;
     m->cpu.fetch_hook = on ? fetch_hook : 0;
+    m->cpu.acct = on;
 }
 
 void cv1k_reset(CV1K *m)

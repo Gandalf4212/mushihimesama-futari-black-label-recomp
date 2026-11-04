@@ -23,8 +23,8 @@ T12 = 'PC + 4 + ((int32_t)((D12 ^ 0x800) - 0x800) << 1)'
 ISA = [
     # ---- data transfer ----
     ('1110nnnniiiiiiii', 'mov #imm,Rn', 'op', 'Rn = (uint32_t)(int32_t)SIMM;'),
-    ('1001nnnndddddddd', 'mov.w @(disp,PC),Rn', 'op', 'Rn = (uint32_t)(int16_t)RW(PC + 4 + D8 * 2);'),
-    ('1101nnnndddddddd', 'mov.l @(disp,PC),Rn', 'op', 'Rn = RL(((PC + 4) & ~3u) + D8 * 4);'),
+    ('1001nnnndddddddd', 'mov.w @(disp,PC),Rn', 'op', 'Rn = (uint32_t)(int16_t)RW_PCREL(PC + 4 + D8 * 2);'),
+    ('1101nnnndddddddd', 'mov.l @(disp,PC),Rn', 'op', 'Rn = RL_PCREL(((PC + 4) & ~3u) + D8 * 4);'),
     ('0110nnnnmmmm0011', 'mov Rm,Rn', 'op', 'Rn = Rm;'),
     ('0010nnnnmmmm0000', 'mov.b Rm,@Rn', 'op', 'WB(Rn, Rm);'),
     ('0010nnnnmmmm0001', 'mov.w Rm,@Rn', 'op', 'WW(Rn, Rm);'),

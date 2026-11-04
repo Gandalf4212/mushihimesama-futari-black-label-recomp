@@ -10,3 +10,5 @@ build/
 u23
 u24
 *.bin
+__pycache__/
+*.pyc

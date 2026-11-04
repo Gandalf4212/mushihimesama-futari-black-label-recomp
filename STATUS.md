@@ -98,10 +98,28 @@
   (boot / FPGA upload / memory check). Need early MAME frames to locate it (capture 0-1500 every 10).
   Cost: build ~4 min (hooks double the C), ~100-200 fps headless.
 
+- **Timing parity with MAME 0.289 DRC (2026-11-04 evening)**: two MAME recompiler behaviors matter as much
+  as the cache model, both now reproduced:
+  1. PC-relative literal loads (`mov.w/mov.l @(disp,PC)`) are collapsed to immediates (cv1k speedups set
+     SH2DRC_FASTEST_OPTIONS, i.e. no STRICT_PCREL): no memory access, no penalty, no cache touch.
+     isa.py uses RW_PCREL/RL_PCREL (untimed fetch path).
+  2. Base cycles are accumulated and only charged at MAME's update points (`core/sh3/sh3_cycles.h`):
+     flush after every mov memory access and the sts.l/stc.l/lds.l/ldc.l stack forms + tas.b (not in a
+     delay slot); charge at unconditional control flow (incl. slot) and when falling into a branch target;
+     conditional branches charge if taken and DROP the pending count if not taken (MAME resets
+     compiler.cycles at compile time after the taken path's update). SH3.acct/acc; generated code
+     ACC/FLUSH/DROP macros; interpreter mirrors it (without branch-target flushes).
+  **Result:** power-on to attract tracks MAME within ±3 frames: MAME 211 +3, 401 0, 801-1001 -1,
+  1441+ -1; attract 1500-2100: 26/26 frames identical at constant offset -1.
+  EEPROM check screens (MAME 1011-1431) differ only because the user's MAME had saved nvram (CHECKING
+  vs our INITIALIZE); user has deleted MAME's nvram\futaribl - recapture to confirm.
+  capture.lua input tokens fixed (P1_/P2_ prefixes via token_to_input_type's player).
+  `run_headless --tmstats a b`: cycle breakdown (penalties, misses, uncached accesses) for frames a..b.
+
 ## Next
-1. User: `capture.bat 1 1500 10` in MAME → copy `snaps\futaribl` to `F:\claude2\fbl\mame_snaps_boot`.
-   Then render ours 0-1600 every frame and use frame_check --per-frame to see where the 68 frames come
-   from (suspects: reset values of BCR2/WCR1/WCR2/MCR before the game writes them — MAME's device_reset
-   values; FPGA bitstream upload loop cost; uncached ROM fetches during boot).
-2. Gameplay capture with inputs; blitter busy-time model (cv1k_v m_blit_delay_ns) if gameplay drifts.
-3. Milestone 8 (Vulkan) / 9 (audio).
+1. Recapture with fresh nvram: `capture.bat 1 2100 10` → compare boot + EEPROM init path. Then find the
+   remaining 1-3 frame differences (first screen +3, then -1): suspects = interpreter lacks branch-target
+   flushes during boot, MAME DRC block/sequence boundaries (max sequence length, page splits), IRQ
+   acceptance points (MAME checks at update points), cache initial state.
+2. Gameplay capture with inputs (now that capture.lua inputs work), blitter busy-time model.
+3. Milestone 8 (Vulkan) / 9 (audio) / 11 (frontend).

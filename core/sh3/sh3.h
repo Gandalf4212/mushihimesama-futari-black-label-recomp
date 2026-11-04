@@ -37,7 +37,9 @@ typedef struct SH3 {
     uint64_t cycles;     /* instruction-count clock (timing model later) */
     uint64_t event_at;
     /* timing hook, called before each executed instruction: returns extra cycles (base-1 + fetch penalty) */
-    uint32_t (*fetch_hook)(void *ctx, uint32_t pc, uint16_t op);   /* generated code returns to the dispatcher once cycles >= event_at */
+    uint32_t (*fetch_hook)(void *ctx, uint32_t pc, uint16_t op);   /* returns fetch penalty */
+    int acct;            /* 1 = MAME-DRC base-cycle accounting (pending acc), 0 = 1 cycle per instruction */
+    uint32_t acc;   /* generated code returns to the dispatcher once cycles >= event_at */
     SH3Bus bus;
 } SH3;
 
