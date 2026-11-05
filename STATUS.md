@@ -163,7 +163,12 @@
    (2400-4200 every 10, stage1.txt, fresh nvram). Ours with --frame-offset -1: MAME 2500 (mode select)
    identical; from 2600 (character select) on no exact match (closest differs by ~8.5k pixels at 2600;
    gameplay at 3200 is the same scene but a different state). Input offsets 0 and -2 give no matches
-   either. Leading suspect: MAME's RTC9701 starts at the host's current date/time (ours at 0) and the
+   either. **MAME is deterministic** (second capture mame_snaps_stage1b is identical to stage1 at
+   2500/2600/3200/4000), so the RTC idea below is out and the difference is ours. New leading suspect:
+   on-chip TMU timer counters (TCNT0-2 at 0xFFFFFE98/A4/B0, TSTR 0xFFFFFE92): ours never count, MAME's
+   do, and games often seed RNG from a running timer at Start. Next: log on-chip register reads after
+   frame 2260; implement TMU (MAME sh3comn.cpp / sh4tmu.cpp, BSD-3) if the game reads it.
+   Old suspect: MAME's RTC9701 starts at the host's current date/time (ours at 0) and the
    game may read it (RNG seed?) after Start. Check: (a) user runs the same MAME capture twice and we
    compare MAME vs MAME (if they differ, MAME is not deterministic here); (b) count RTC read commands
    (cmd 0x8) in our run after frame 2260; (c) if RTC matters, add a fixed RTC time option on both sides
