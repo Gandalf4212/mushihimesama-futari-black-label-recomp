@@ -44,6 +44,7 @@ typedef struct CV1K {
     uint8_t area1[0x10000];                 /* 0x04000000-0x0400FFFF (INTC2, ports) */
     Nand nand; Rtc9701 rtc; Blitter blit; Inputs in;
     Timing tm; int timing_on, dma_active;
+    int log_regs; uint32_t reg_addr[64]; uint64_t reg_n[64]; int reg_used;   /* debug: on-chip reads */
     int irq2_pending;
     uint32_t dma_irq_pending; uint64_t dma_bytes, dma_count;
     uint64_t frame, irqs_taken, sound_writes;

@@ -6,6 +6,7 @@
 typedef struct {
     uint16_t *vram;            /* ARGB1555: bit15 = opaque ("transparency" bit), 5:5:5 RGB */
     uint64_t draws, uploads, bad_ops;
+    uint8_t mode_use[128]; uint8_t mode_tag;   /* debug: which (blend, smode, dmode) were used, tagged by phase */
 } BlitRef;
 void blit_ref_init(BlitRef *b);
 /* Execute one command list from main RAM (big-endian bytes, mask = ram_size - 1). */

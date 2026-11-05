@@ -58,20 +58,21 @@ int main(int argc, char **argv)
     if (!cv1k_init(&m, argv[1], argv[2], strtoul(argv[3], 0, 16))) return 1;
     uint32_t entry = strtoul(argv[4], 0, 16);
     uint64_t frames = strtoull(argv[5], 0, 10);
-    int interp = 0, timing = 1, report = 60; uint64_t st_from = ~0ull, st_to = 0, st_c0 = 0, st_i0 = 0; Timing st0; const char *misses = NULL, *pngdir = NULL; int png_every = 0; uint64_t png_from = 0, png_to = ~0ull;
+    int interp = 0, timing = 1, report = 60; uint64_t st_from = ~0ull, st_to = 0, st_c0 = 0, st_i0 = 0; Timing st0; const char *misses = NULL, *pngdir = NULL; int png_every = 0; const char *dump_dir = NULL; char dump_list[512] = ""; uint64_t png_from = 0, png_to = ~0ull;
     for (int i = 6; i < argc; i++) {
         if (!strcmp(argv[i], "--interp")) interp = 1;
         if (!strcmp(argv[i], "--tmstats") && i + 2 < argc) { st_from = strtoull(argv[++i], 0, 10); st_to = strtoull(argv[++i], 0, 10); }
         if (!strcmp(argv[i], "--timing") && i + 1 < argc) timing = strcmp(argv[++i], "off") != 0;
         if (!strcmp(argv[i], "--report") && i + 1 < argc) report = atoi(argv[++i]);
         if (!strcmp(argv[i], "--misses") && i + 1 < argc) misses = argv[++i];
+        if (!strcmp(argv[i], "--dump-ram") && i + 2 < argc) { dump_dir = argv[++i]; snprintf(dump_list, sizeof dump_list, ",%s,", argv[++i]); }
         if (!strcmp(argv[i], "--input") && i + 1 < argc) load_inputs(argv[++i]);
         if (!strcmp(argv[i], "--frame-offset") && i + 1 < argc) g_in_off = atoll(argv[++i]);
         if (!strcmp(argv[i], "--png-range") && i + 2 < argc) { png_from = strtoull(argv[++i], 0, 10); png_to = strtoull(argv[++i], 0, 10); }
         if (!strcmp(argv[i], "--png") && i + 2 < argc) { pngdir = argv[++i]; png_every = atoi(argv[++i]); }
     }
     SH3 *s = &m.cpu;
-    g_m = &m; blit_ref_init(&g_blit); m.blit.on_exec = on_exec;
+    g_m = &m; blit_ref_init(&g_blit); g_blit.mode_tag = 1; m.blit.on_exec = on_exec;
     static uint32_t fb[320 * 240];
     if (!timing) cv1k_set_timing(&m, 0);
     m.next_vsync = m.cycles_per_frame;                                       /* frames count from power-on, like MAME */
@@ -91,6 +92,15 @@ int main(int argc, char **argv)
         if (s->trap) cv1k_take_trap(&m);
         if (s->cycles >= m.next_vsync) {
             cv1k_vsync(&m); m.next_vsync += m.cycles_per_frame; if (g_nev) apply_inputs(&m);
+            if (dump_dir) {
+                char key[32]; snprintf(key, sizeof key, ",%llu,", (unsigned long long)m.frame);
+                if (strstr(dump_list, key)) {
+                    char path[512]; snprintf(path, sizeof path, "%s/ram_%05llu.bin", dump_dir, (unsigned long long)m.frame);
+                    FILE *f = fopen(path, "wb"); if (f) { fwrite(m.ram, 1, m.ram_size, f); fclose(f); }
+                }
+            }
+            if (m.frame == 2200) m.log_regs = 1;
+            if (m.frame == 2530) g_blit.mode_tag = 2;   /* after mode select: character select onwards */
             if (m.frame == st_from) { st0 = m.tm; st_c0 = s->cycles; st_i0 = s->insns + dispatch_insns_estimate(s); }
             if (m.frame == st_to) {
                 Timing *t = &m.tm;
@@ -115,6 +125,8 @@ int main(int argc, char **argv)
         cv1k_check_irq(&m);
     }
     double secs = (double)(clock() - t0) / CLOCKS_PER_SEC;
+    for (int i = 0; i < 128; i++) if (g_blit.mode_use[i]) printf("mode blend=%d s=%d d=%d used:%s%s\n", i >> 6, (i >> 3) & 7, i & 7, g_blit.mode_use[i] & 1 ? " before" : "", g_blit.mode_use[i] & 2 ? " charsel+" : "");
+    for (int i = 0; i < m.reg_used; i++) printf("reg read %08x x%llu\n", m.reg_addr[i], (unsigned long long)m.reg_n[i]);
     printf("saves: nand written=%d, eeprom written=%d\n", m.nand.dirty, m.rtc.dirty);
     printf("blitter: %llu draws, %llu uploads, %llu bad ops\n", (unsigned long long)g_blit.draws, (unsigned long long)g_blit.uploads, (unsigned long long)g_blit.bad_ops);
     printf("%llu frames in %.2f s (%.0f fps), %llu instructions\n", (unsigned long long)frames, secs, frames / secs,

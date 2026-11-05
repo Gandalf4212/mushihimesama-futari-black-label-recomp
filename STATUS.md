@@ -168,6 +168,15 @@
    on-chip TMU timer counters (TCNT0-2 at 0xFFFFFE98/A4/B0, TSTR 0xFFFFFE92): ours never count, MAME's
    do, and games often seed RNG from a running timer at Start. Next: log on-chip register reads after
    frame 2260; implement TMU (MAME sh3comn.cpp / sh4tmu.cpp, BSD-3) if the game reads it.
+   Findings (2026-11-04 late): game reads NO TMU registers after Start (only ports, DMAC, INTC, CCR,
+   EXPEVT/TRA), so TMU is out. Input-offset sweep -3..+1: mode select always identical, character
+   select always differs by the same 8,564 px -> not input timing. Blend modes used there are the same
+   (s0d0, s0d1, s0d5, plain) already verified in attract. Working theory: game state divergence (e.g.
+   an RNG advanced per idle-loop iteration / per CPU-time-dependent event) from residual timing error.
+   Tooling to find it: `tools/mame/ramdump.lua` + `ramdump.bat` (+ shared `inputs.lua`, capture.lua now
+   uses it too), `run_headless --dump-ram dir f1,f2,...`, `tools/ram_diff.py a.bin b.bin`.
+   Frame mapping: ours = MAME + 1 (with --frame-offset -1). Next: diff MAME ram_02500..02600 vs ours
+   ram_02501..02601, find the first differing variables, trace the code that writes them.
    Old suspect: MAME's RTC9701 starts at the host's current date/time (ours at 0) and the
    game may read it (RNG seed?) after Start. Check: (a) user runs the same MAME capture twice and we
    compare MAME vs MAME (if they differ, MAME is not deterministic here); (b) count RTC read commands

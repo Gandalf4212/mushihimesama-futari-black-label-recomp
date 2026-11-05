@@ -86,6 +86,7 @@ static void draw(BlitRef *b, const Clip *clip, uint32_t attr, uint32_t alpha, in
     C tint = {tr >> 2, tg >> 2, tb >> 2};
     int tinted = tint.r != 0x20 || tint.g != 0x20 || tint.b != 0x20;
     if (smode == 0 && sa == 0x1F && dmode == 4 && da == 0x1F) bl = 0;
+    b->mode_use[(bl ? 64 : 0) + smode * 8 + dmode] |= b->mode_tag;
 
     if (flipx) src_x += dimx - 1;
     int yf = 1;

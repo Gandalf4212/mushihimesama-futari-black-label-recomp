@@ -271,6 +271,14 @@ static void port_out(CV1K *m, uint32_t p, uint32_t v)
     }
 }
 
+static void log_reg(CV1K *m, uint32_t a)
+{
+    uint32_t p = a & 0x1FFFFFFFu;
+    if (!m->log_regs || !(a >= 0xFFFF0000u || (p >= 0x04000000u && p < 0x04010000u))) return;
+    for (int i = 0; i < m->reg_used; i++) if (m->reg_addr[i] == a) { m->reg_n[i]++; return; }
+    if (m->reg_used < 64) { m->reg_addr[m->reg_used] = a; m->reg_n[m->reg_used++] = 1; }
+}
+
 #define TM(m, a, w) do { if ((m)->timing_on && !(m)->dma_active) (m)->cpu.cycles += tm_data(&(m)->tm, (a), (w)); } while (0)
 
 static void onchip_written(CV1K *m, uint32_t a, uint32_t v)
@@ -293,16 +301,16 @@ static uint32_t fetch_hook(void *c, uint32_t pc, uint16_t op)
 
 static uint8_t bus_rb(void *c, uint32_t a)
 {
-    CV1K *m = c; TM(m, a, 0); int hit; uint32_t v = port_in(m, P(a), &hit); if (hit) return v;
+    CV1K *m = c; TM(m, a, 0); log_reg(m, a); int hit; uint32_t v = port_in(m, P(a), &hit); if (hit) return v;
     uint8_t *q = plain(m, a); return q ? *q : dev_read(m, a, 1);
 }
 static uint16_t bus_rw(void *c, uint32_t a)
 {
-    CV1K *m = c; TM(m, a, 0); uint8_t *q = plain(m, a); return q ? (uint16_t)(q[0] << 8 | q[1]) : dev_read(m, a, 2);
+    CV1K *m = c; TM(m, a, 0); log_reg(m, a); uint8_t *q = plain(m, a); return q ? (uint16_t)(q[0] << 8 | q[1]) : dev_read(m, a, 2);
 }
 static uint32_t bus_rl(void *c, uint32_t a)
 {
-    CV1K *m = c; TM(m, a, 0); uint8_t *q = plain(m, a);
+    CV1K *m = c; TM(m, a, 0); log_reg(m, a); uint8_t *q = plain(m, a);
     return q ? (uint32_t)q[0] << 24 | q[1] << 16 | q[2] << 8 | q[3] : dev_read(m, a, 4);
 }
 static void bus_wb(void *c, uint32_t a, uint8_t v)
