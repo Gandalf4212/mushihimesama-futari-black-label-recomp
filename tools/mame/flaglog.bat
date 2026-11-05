@@ -3,6 +3,7 @@ rem Polls a work-RAM word every few microseconds of emulated time and logs its c
 rem Put flaglog.lua, inputs.lua and the input script in the MAME folder; delete nvram\futaribl first.
 rem Usage: flaglog.bat <input_script> [first_frame] [last_frame] [addr_hex] [poll_us]
 rem        (defaults 150 420 0C1DE144 5)
+rem Set FLAG_IPRA0=1 before running to disable the on-chip timer interrupts (IPRA = 0) from frame 150.
 set CAP_INPUT=%1
 set FLAG_FIRST=%2
 set FLAG_LAST=%3

@@ -7,6 +7,9 @@ local addr  = tonumber(os.getenv("FLAG_ADDR") or "0C1DE144", 16)
 local first = tonumber(os.getenv("FLAG_FIRST") or "150")
 local last  = tonumber(os.getenv("FLAG_LAST") or "420")
 local step  = tonumber(os.getenv("POLL_US") or "5") / 1e6
+-- FLAG_IPRA0=1: write IPRA (0xFFFFFEE2) = 0 after every frame from frame 150 on, i.e. timers run but
+-- their interrupts (TUNI0-2) are never taken; used to measure the cost of the timer interrupts.
+local ipra0 = os.getenv("FLAG_IPRA0") == "1"
 local n = dofile("inputs.lua")
 local screen, space, out
 local function now() local t = manager.machine.time; return t.seconds + t.attoseconds / 1e18 end
@@ -28,6 +31,7 @@ local function on_frame()
     space = space or manager.machine.devices[":maincpu"].spaces["program"]
     local fr = screen:frame_number()
     apply_inputs(fr)
+    if ipra0 and fr >= 150 then space:write_u16(0xFFFFFEE2, 0) end
     if fr % 50 == 0 then print("flaglog.lua: frame " .. fr) end
     if not started and fr >= first then
       started = true
@@ -44,4 +48,4 @@ local function on_frame()
 end
 local add = emu.add_machine_frame_notifier or emu.register_frame_done
 _G.flaglog_sub = add(on_frame)
-print(string.format("flaglog.lua: %d input events, polling %08x every %.1f us, frames %d-%d", n, addr, step * 1e6, first, last))
+print(string.format("flaglog.lua: %d input events, polling %08x every %.1f us, frames %d-%d%s", n, addr, step * 1e6, first, last, ipra0 and ", IPRA forced to 0" or ""))
