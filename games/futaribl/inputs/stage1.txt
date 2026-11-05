@@ -1,0 +1,24 @@
+# Futari Black Label: coin up, start, accept defaults, then play part of stage 1.
+# Frame numbers are MAME frames from power-on (MAME nvram cleared first).
+2200 6 COIN1
+2260 6 START1
+2400 6 B1
+2460 6 B1
+2520 6 B1
+2580 6 B1
+2640 6 B1
+2700 6 B1
+# play: hold shot, weave left/right/up/down
+2800 1400 B1
+2900 120 LEFT
+3020 120 RIGHT
+3140 60 UP
+3200 120 RIGHT
+3320 120 LEFT
+3440 60 DOWN
+3500 100 LEFT
+3600 100 RIGHT
+3700 60 UP
+3760 120 LEFT
+3880 120 RIGHT
+4000 100 DOWN

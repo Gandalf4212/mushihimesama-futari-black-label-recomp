@@ -115,6 +115,7 @@ int main(int argc, char **argv)
         cv1k_check_irq(&m);
     }
     double secs = (double)(clock() - t0) / CLOCKS_PER_SEC;
+    printf("saves: nand written=%d, eeprom written=%d\n", m.nand.dirty, m.rtc.dirty);
     printf("blitter: %llu draws, %llu uploads, %llu bad ops\n", (unsigned long long)g_blit.draws, (unsigned long long)g_blit.uploads, (unsigned long long)g_blit.bad_ops);
     printf("%llu frames in %.2f s (%.0f fps), %llu instructions\n", (unsigned long long)frames, secs, frames / secs,
            (unsigned long long)s->insns);

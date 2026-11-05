@@ -120,7 +120,25 @@
   deleted first): all 16 sampled frames 211-2091 match exactly, incl. EEPROM INITIALIZE screens.
   Offsets (MAME - ours): +3 at 211-221, 0 at 401, -1 from 801 to 2091 (constant).
 
+- **Milestone 11 first playable build (frontend)**: `core/frontend/main_sdl.c` (SDL2): Yoko default (game
+  rotated 270 deg CW, integer-scaled in a 16:9 window), `--tate-cw` (180) / `--tate-ccw` (0), `--scale`,
+  `--fullscreen`/F11, `--no-slowdown` (timing off), `--rotate-controls`; keyboard + SDL gamepad; inputs
+  read right before each frame; frame loop identical to run_headless (IRQ check order matters: a
+  `sleep` must be woken right after vsync). First run auto-creates `assets/` (program.bin, nand.bin)
+  from a `futaribl/` or `roms/futaribl/` folder next to the exe; ROM not needed afterwards.
+  Saves on exit: NAND settings block (game keeps settings/high scores in NAND, not the RTC EEPROM) and
+  EEPROM if written. `tools/build_frontend.sh <set> linux|windows` (Windows via mingw-w64 +
+  SDL2-devel-2.30.9-mingw from GitHub releases, unpacked at /home/claude/deps). Linux build verified
+  headless (SDL offscreen): Yoko upright. Windows exe built, untested (no Wine here) -> user tests.
+  Known limits: no sound, software blitter, vsync-paced at monitor rate (game is 60.018 Hz).
+- `games/futaribl/inputs/stage1.txt`: coin/start/defaults/play stage 1 (MAME frames). Ours reaches
+  Character Select ~2600 and stage 1 gameplay 3000-4200 with offset -1.
+
 ## Next
+0. Stage-1 gameplay comparison: user runs (nvram deleted) `capture.bat 2400 4200 10 stage1.txt`,
+   copies to F:\claude2\fbl\mame_snaps_stage1; ours: run_headless ... 4300 --input
+   games/futaribl/inputs/stage1.txt --frame-offset -1 --png dir 1 --png-range 2350 4300; frame_check.
+   Then user feedback on the Windows build (does it start, speed, frame pacing, controls).
 1. Optional polish: the remaining 1-3 frame differences (first screen +3, then -1): suspects = interpreter lacks branch-target
    flushes during boot, MAME DRC block/sequence boundaries (max sequence length, page splits), IRQ
    acceptance points (MAME checks at update points), cache initial state.
