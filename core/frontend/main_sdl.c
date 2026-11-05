@@ -19,7 +19,9 @@
 #include "../runtime/cv1k.h"
 #include "../runtime/dispatch.h"
 #include "../render/blit_ref.h"
-#include "game_config.h"   /* generated per game: GAME_SET, GAME_TITLE, GAME_RAM_SIZE, GAME_MAIN_ENTRY, GAME_U4, GAME_U2 */
+#include "game_config.h"
+#include "config.h"
+#include "input.h"   /* generated per game: GAME_SET, GAME_TITLE, GAME_RAM_SIZE, GAME_MAIN_ENTRY, GAME_U4, GAME_U2 */
 
 static BlitRef g_blit;
 static CV1K g_m;
@@ -46,22 +48,23 @@ static int setup(const char *romdir)
     return 0;
 }
 
-typedef enum { ROT_YOKO, ROT_TATE_CW, ROT_TATE_CCW } Orient;
+#define ROT_YOKO ORIENT_YOKO
+#define ROT_TATE_CW ORIENT_TATE_CW
+#define ROT_TATE_CCW ORIENT_TATE_CCW
 
 int main(int argc, char **argv)
 {
-    Orient orient = ROT_YOKO; int scale = 0, fullscreen = 0, slowdown = 1, rot_controls = 0; long shot_frame = -1; const char *shot_path = NULL;
+    long shot_frame = -1; const char *shot_path = NULL; const char *cfg_path = "config.toml";
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--setup") && i + 1 < argc) return setup(argv[i + 1]);
-        else if (!strcmp(argv[i], "--yoko")) orient = ROT_YOKO;
-        else if (!strcmp(argv[i], "--tate-cw")) orient = ROT_TATE_CW;
-        else if (!strcmp(argv[i], "--tate-ccw")) orient = ROT_TATE_CCW;
-        else if (!strcmp(argv[i], "--scale") && i + 1 < argc) scale = atoi(argv[++i]);
-        else if (!strcmp(argv[i], "--fullscreen")) fullscreen = 1;
-        else if (!strcmp(argv[i], "--no-slowdown")) slowdown = 0;
-        else if (!strcmp(argv[i], "--rotate-controls")) rot_controls = 1;
-        else if (!strcmp(argv[i], "--shot") && i + 2 < argc) { shot_frame = atol(argv[++i]); shot_path = argv[++i]; }   /* debug */
+        if (!strcmp(argv[i], "--config") && i + 1 < argc) cfg_path = argv[i + 1];
+        if (!strcmp(argv[i], "--shot") && i + 2 < argc) { shot_frame = atol(argv[i + 1]); shot_path = argv[i + 2]; }   /* debug */
     }
+    Config cfg; config_defaults(&cfg);
+    if (!config_load(&cfg, cfg_path)) config_save(&cfg, cfg_path);   /* first run: write the defaults */
+    int bad = config_args(&cfg, argc, argv);
+    if (bad && strcmp(argv[bad], "--setup")) fprintf(stderr, "unknown option %s\n", argv[bad]);
+    Orientation orient = cfg.orientation; int scale = cfg.scale, fullscreen = cfg.fullscreen, slowdown = cfg.slowdown;
     FILE *probe = fopen("assets/program.bin", "rb");
     if (probe) fclose(probe);
     else if (setup(GAME_SET) != 0 && setup("roms/" GAME_SET) != 0) {   /* first run: build assets/ from the ROM */
@@ -94,8 +97,8 @@ int main(int argc, char **argv)
     SDL_Renderer *ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
     SDL_Texture *tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, 320, 240);
-    SDL_GameController *pad = NULL;
-    for (int i = 0; i < SDL_NumJoysticks(); i++) if (SDL_IsGameController(i)) { pad = SDL_GameControllerOpen(i); break; }
+    Input in; input_init(&in);
+    for (int i = 0; i < SDL_NumJoysticks(); i++) if (SDL_IsGameController(i)) input_pad_added(&in, i);
 
     static uint32_t fb[320 * 240];
     SH3 *s = &g_m.cpu;
@@ -111,31 +114,11 @@ int main(int argc, char **argv)
             if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_F11) {
                 fullscreen = !fullscreen; SDL_SetWindowFullscreen(win, fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
             }
-            if (e.type == SDL_CONTROLLERDEVICEADDED && !pad) pad = SDL_GameControllerOpen(e.cdevice.which);
+            if (e.type == SDL_CONTROLLERDEVICEADDED) input_pad_added(&in, e.cdevice.which);
+            if (e.type == SDL_CONTROLLERDEVICEREMOVED) input_pad_removed(&in, e.cdevice.which);
         }
-        const Uint8 *k = SDL_GetKeyboardState(NULL);
-        int up = k[SDL_SCANCODE_UP], dn = k[SDL_SCANCODE_DOWN], lf = k[SDL_SCANCODE_LEFT], rt = k[SDL_SCANCODE_RIGHT];
-        int b1 = k[SDL_SCANCODE_Z], b2 = k[SDL_SCANCODE_X], b3 = k[SDL_SCANCODE_C], b4 = k[SDL_SCANCODE_V];
-        int coin = k[SDL_SCANCODE_5], coin2 = k[SDL_SCANCODE_6], st1 = k[SDL_SCANCODE_1], st2 = k[SDL_SCANCODE_2];
-        if (pad) {
-            int ax = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTX), ay = SDL_GameControllerGetAxis(pad, SDL_CONTROLLER_AXIS_LEFTY);
-            up |= SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_UP) || ay < -16000;
-            dn |= SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_DOWN) || ay > 16000;
-            lf |= SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_LEFT) || ax < -16000;
-            rt |= SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_DPAD_RIGHT) || ax > 16000;
-            b1 |= SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_A);
-            b2 |= SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_B);
-            b3 |= SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_X);
-            b4 |= SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_Y);
-            coin |= SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_BACK);
-            st1 |= SDL_GameControllerGetButton(pad, SDL_CONTROLLER_BUTTON_START);
-        }
-        if (rot_controls && orient != ROT_YOKO) {          /* stick mounted with the rotated monitor */
-            int t = up; if (orient == ROT_TATE_CW) { up = lf; lf = dn; dn = rt; rt = t; } else { up = rt; rt = dn; dn = lf; lf = t; }
-        }
-        g_m.in.c = (uint8_t)~((coin ? 0x04 : 0) | (coin2 ? 0x08 : 0) | (st1 ? 0x10 : 0) | (st2 ? 0x20 : 0) | (k[SDL_SCANCODE_9] ? 0x01 : 0));
-        g_m.in.d = (uint8_t)~((up ? 1 : 0) | (dn ? 2 : 0) | (lf ? 4 : 0) | (rt ? 8 : 0) | (b1 ? 0x10 : 0) | (b2 ? 0x20 : 0) | (b3 ? 0x40 : 0) | (b4 ? 0x80 : 0));
-        g_m.in.f = (uint8_t)~(k[SDL_SCANCODE_F2] ? 0x02 : 0);
+        input_frame(&in, cfg.freeplay, cfg.rotate_controls && orient == ROT_TATE_CW, cfg.rotate_controls && orient == ROT_TATE_CCW,
+                    &g_m.in.c, &g_m.in.d, &g_m.in.l, &g_m.in.f);
 
         /* ---- run exactly one frame (until the next vsync) ---- */
         while (s->cycles < g_m.next_vsync) {               /* same order as run_headless (verified vs MAME) */

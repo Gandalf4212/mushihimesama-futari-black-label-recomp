@@ -134,7 +134,32 @@
 - `games/futaribl/inputs/stage1.txt`: coin/start/defaults/play stage 1 (MAME frames). Ours reaches
   Character Select ~2600 and stage 1 gameplay 3000-4200 with offset -1.
 
+- **Frontend input + config (2026-11-04)**: `core/frontend/input.c` (P1/P2 keyboard with MAME default keys
+  + Z/X/C/V alternates, 2 gamepads, coin 5/6, start 1/2, service 9, test F2; free play default: a Start
+  press inserts a coin (4 frames) then presses Start; `--coins` for coin-op behavior), `core/frontend/
+  config.c` (config.toml subset: [video] orientation/scale/fullscreen, [game] slowdown/freeplay,
+  [input] rotate_controls; defaults written on first run; CLI flags + `--set section.key=value` +
+  `--config file` override). Free play is a frontend feature for now; a later option is setting the
+  game's own FREE PLAY in its NAND settings.
+
+## Decisions (2026-11-04)
+- **No Vulkan blitter.** The CPU reference blitter (MAME-exact) renders the game image; the GPU is used
+  only for presentation. Milestone 8 is now: **GPU presentation layer on SDL3's GPU API** (Vulkan /
+  D3D12 / Metal backends) with our own shaders: CRT (scanlines, mask, glow), curved CRT, bezel images with
+  a configurable screen rect, integer/fit scaling, low-latency presentation (1 frame in flight, VRR /
+  tearing option). Optional later: librashader for RetroArch presets.
+- Overlay (requested): "FPS / CPU % / GPU %" + frame-time graph. CPU % = emulation time / 16.66 ms;
+  GPU % needs GPU timing (SDL3 GPU may not expose timestamps: fall back to measured submit/present time).
+- F1 settings menu (orientation, scale, shader/bezel, slowdown, free play, key/pad mapping), writes
+  config.toml.
+
 ## Next
+1. **Sound (milestone 9)**: YMZ770 (MAME src/devices/sound/ymz770.cpp + its MPEG-like decoder
+   mpeg_audio.cpp; check licenses), sound ROMs u23/u24 (word-swapped) into assets/ at setup, SDL audio
+   output; headless WAV dump for checking against MAME (`mame -wavwrite`).
+2. GPU presentation layer (SDL3 GPU) + CRT/curved shaders + bezels.
+3. F1 menu + overlay (needs a small bitmap font: write our own 8x8 font, no third-party font files).
+4. Stage-1 gameplay comparison when mame_snaps_stage1 exists.
 0. Stage-1 gameplay comparison: user runs (nvram deleted) `capture.bat 2400 4200 10 stage1.txt`,
    copies to F:\claude2\fbl\mame_snaps_stage1; ours: run_headless ... 4300 --input
    games/futaribl/inputs/stage1.txt --frame-offset -1 --png dir 1 --png-range 2350 4300; frame_check.
