@@ -123,12 +123,13 @@ int main(int argc, char **argv)
         /* ---- run exactly one frame (until the next vsync) ---- */
         while (s->cycles < g_m.next_vsync) {               /* same order as run_headless (verified vs MAME) */
             cv1k_check_irq(&g_m);
-            s->event_at = g_m.next_vsync;
-            if (s->sleeping) { s->cycles = g_m.next_vsync; break; }
+            { uint64_t te = cv1k_next_event(&g_m); s->event_at = te < g_m.next_vsync ? te : g_m.next_vsync; }
+            if (s->sleeping) { s->cycles = s->event_at; cv1k_timers(&g_m); continue; }
             if (!booted && (s->pc & 0x1FFFFFFFu) == (entry & 0x1FFFFFFFu)) booted = 1;
             if (!booted) sh3_step(s);                        /* the game's own boot code, on the interpreter */
             else dispatch_step(s);
             if (s->trap) cv1k_take_trap(&g_m);
+            cv1k_timers(&g_m);
         }
         cv1k_vsync(&g_m); g_m.next_vsync += g_m.cycles_per_frame;
 

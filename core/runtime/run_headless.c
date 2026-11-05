@@ -78,6 +78,7 @@ int main(int argc, char **argv)
     m.next_vsync = m.cycles_per_frame;                                       /* frames count from power-on, like MAME */
     while ((s->pc & 0x1FFFFFFFu) != (entry & 0x1FFFFFFFu)) {                 /* boot on the interpreter */
         sh3_step(s);
+        cv1k_timers(&m);
         if (s->cycles >= m.next_vsync) { cv1k_vsync(&m); m.next_vsync += m.cycles_per_frame; }
     }
     printf("boot reached main entry at frame %llu (cycle %llu)\n", (unsigned long long)m.frame, (unsigned long long)s->cycles);
@@ -85,11 +86,12 @@ int main(int argc, char **argv)
     clock_t t0 = clock();
     uint64_t last_blit = 0, last_nand = 0;
     while (m.frame < frames) {
-        s->event_at = m.next_vsync;
-        if (s->sleeping) { s->cycles = m.next_vsync; }
+        { uint64_t te = cv1k_next_event(&m); s->event_at = te < m.next_vsync ? te : m.next_vsync; }
+        if (s->sleeping) { s->cycles = s->event_at; }
         else if (interp) sh3_step(s);
         else dispatch_step(s);
         if (s->trap) cv1k_take_trap(&m);
+        cv1k_timers(&m);
         if (s->cycles >= m.next_vsync) {
             cv1k_vsync(&m); m.next_vsync += m.cycles_per_frame; if (g_nev) apply_inputs(&m);
             if (dump_dir) {
@@ -116,8 +118,8 @@ int main(int argc, char **argv)
                 blit_ref_frame(&g_blit, m.blit.scroll_x, m.blit.scroll_y, fb); png_write_rgb(path, fb, 320, 240);
             }
             if (report && m.frame % report == 0)
-                printf("frame %5llu  pc=%08x  idlevar=%08x  irqs=%llu  blits=+%llu  nand=+%lluKB  snd=%llu  dma=%llu/%lluKB  fpga_bits=%u\n",
-                       (unsigned long long)m.frame, s->pc, ram32(&m, 0x0C002310u), (unsigned long long)m.irqs_taken,
+                printf("frame %5llu  sr=%08x tuni0=%llu tuni1=%llu pc=%08x  idlevar=%08x  irqs=%llu  blits=+%llu  nand=+%lluKB  snd=%llu  dma=%llu/%lluKB  fpga_bits=%u\n",
+                       (unsigned long long)m.frame, s->sr, (unsigned long long)m.irq_by_src[0], (unsigned long long)m.irq_by_src[1], s->pc, ram32(&m, 0x0C002310u), (unsigned long long)m.irqs_taken,
                        (unsigned long long)(m.blit.execs - last_blit), (unsigned long long)((m.nand.bytes_read - last_nand) >> 10),
                        (unsigned long long)m.sound_writes, (unsigned long long)m.dma_count, (unsigned long long)(m.dma_bytes >> 10), m.blit.fw_pos),
                 last_blit = m.blit.execs, last_nand = m.nand.bytes_read;
@@ -127,6 +129,7 @@ int main(int argc, char **argv)
     double secs = (double)(clock() - t0) / CLOCKS_PER_SEC;
     for (int i = 0; i < 128; i++) if (g_blit.mode_use[i]) printf("mode blend=%d s=%d d=%d used:%s%s\n", i >> 6, (i >> 3) & 7, i & 7, g_blit.mode_use[i] & 1 ? " before" : "", g_blit.mode_use[i] & 2 ? " charsel+" : "");
     for (int i = 0; i < m.reg_used; i++) printf("reg read %08x x%llu\n", m.reg_addr[i], (unsigned long long)m.reg_n[i]);
+    printf("irqs by source: tuni0=%llu tuni1=%llu tuni2=%llu irq2=%llu; tmu running %d%d%d, TCR %04x %04x %04x TCOR %08x %08x %08x IPRA %04x\n", (unsigned long long)m.irq_by_src[0], (unsigned long long)m.irq_by_src[1], (unsigned long long)m.irq_by_src[2], (unsigned long long)m.irq_by_src[3], m.tmu[0].running, m.tmu[1].running, m.tmu[2].running, m.onchip[0xFE9C]<<8|m.onchip[0xFE9D], m.onchip[0xFEA8]<<8|m.onchip[0xFEA9], m.onchip[0xFEB4]<<8|m.onchip[0xFEB5], m.onchip[0xFE94]<<24|m.onchip[0xFE95]<<16|m.onchip[0xFE96]<<8|m.onchip[0xFE97], m.onchip[0xFEA0]<<24|m.onchip[0xFEA1]<<16|m.onchip[0xFEA2]<<8|m.onchip[0xFEA3], m.onchip[0xFEAC]<<24|m.onchip[0xFEAD]<<16|m.onchip[0xFEAE]<<8|m.onchip[0xFEAF], m.onchip[0xFEE2]<<8|m.onchip[0xFEE3]);
     printf("saves: nand written=%d, eeprom written=%d\n", m.nand.dirty, m.rtc.dirty);
     printf("blitter: %llu draws, %llu uploads, %llu bad ops\n", (unsigned long long)g_blit.draws, (unsigned long long)g_blit.uploads, (unsigned long long)g_blit.bad_ops);
     printf("%llu frames in %.2f s (%.0f fps), %llu instructions\n", (unsigned long long)frames, secs, frames / secs,

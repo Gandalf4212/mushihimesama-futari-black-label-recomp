@@ -155,6 +155,69 @@ static void rtc_write(Rtc9701 *r, uint8_t v)
     r->clk = clk;
 }
 
+/* ---------------- on-chip TMU (behavior per MAME sh4tmu.cpp, BSD-3) ----------------
+ * TSTR 0xFFFFFE92; channel n: TCOR 0xFE94+12n, TCNT 0xFE98+12n, TCR 0xFE9C+12n (16-bit).
+ * Counts down at Pphi/div, Pphi = CPU/4 (MD = 0); underflow reloads TCOR, sets UNF (TCR b8) and, with
+ * UNIE (b5), requests TUNIn (INTEVT 0x400/0x420/0x440, priority IPRA nibbles 15:12/11:8/7:4). */
+static inline uint32_t oc32(CV1K *m, uint32_t o) { uint8_t *q = &m->onchip[o]; return (uint32_t)q[0] << 24 | q[1] << 16 | q[2] << 8 | q[3]; }
+static inline void oc_set32(CV1K *m, uint32_t o, uint32_t v) { uint8_t *q = &m->onchip[o]; q[0] = v >> 24; q[1] = v >> 16; q[2] = v >> 8; q[3] = v; }
+static inline uint16_t oc16(CV1K *m, uint32_t o) { return (uint16_t)(m->onchip[o] << 8 | m->onchip[o + 1]); }
+static inline void oc_set16(CV1K *m, uint32_t o, uint16_t v) { m->onchip[o] = v >> 8; m->onchip[o + 1] = v; }
+#define TCOR(n) (0xFE94 + 12 * (n))
+#define TCNT(n) (0xFE98 + 12 * (n))
+#define TCR(n)  (0xFE9C + 12 * (n))
+static uint64_t tmu_tick(CV1K *m, int n, uint16_t tcr) { static const int d[8] = {4, 16, 64, 256, 1024, 1, 1, 1}; (void)m; (void)n; return 4u * d[tcr & 7]; }
+static uint32_t tmu_count(CV1K *m, int n, uint16_t tcr)       /* MAME compute_ticks_timer: remaining*hz/div - 1 */
+{
+    uint64_t now = m->cpu.cycles, rem = m->tmu[n].next > now ? m->tmu[n].next - now : 0;
+    return (uint32_t)((double)rem / (double)tmu_tick(m, n, tcr) - 1.0);
+}
+static void tmu_recompute(CV1K *m, int n) { m->tmu[n].next = m->cpu.cycles + ((uint64_t)oc32(m, TCNT(n)) + 1) * tmu_tick(m, n, oc16(m, TCR(n))); }
+
+void cv1k_timers(CV1K *m)
+{
+    for (int n = 0; n < 3; n++)
+        while (m->tmu[n].running && m->cpu.cycles >= m->tmu[n].next) {
+            uint32_t tcor = oc32(m, TCOR(n));
+            oc_set32(m, TCNT(n), tcor);
+            m->tmu[n].next += ((uint64_t)tcor + 1) * tmu_tick(m, n, oc16(m, TCR(n)));
+            uint16_t tcr = oc16(m, TCR(n)) | 0x100;
+            oc_set16(m, TCR(n), tcr);
+            if (tcr & 0x20) m->tmu[n].req = 1;
+        }
+}
+
+uint64_t cv1k_next_event(CV1K *m)
+{
+    uint64_t e = ~0ull;
+    for (int n = 0; n < 3; n++) if (m->tmu[n].running && m->tmu[n].next < e) e = m->tmu[n].next;
+    return e;
+}
+
+/* called after the CPU wrote on-chip register bytes [o, o+len) (old values captured by the caller) */
+static void tmu_written(CV1K *m, uint32_t o, uint32_t len, uint8_t old_tstr, const uint16_t *old_tcr)
+{
+    if (o <= 0xFE92 && o + len > 0xFE92) {
+        uint8_t now = m->onchip[0xFE92], chg = now ^ old_tstr;
+        for (int n = 0; n < 3; n++) if (chg & (1 << n)) {
+            if (!(now & (1 << n))) { oc_set32(m, TCNT(n), tmu_count(m, n, oc16(m, TCR(n)))); m->tmu[n].running = 0; }
+            else { m->tmu[n].running = 1; tmu_recompute(m, n); }
+        }
+    }
+    for (int n = 0; n < 3; n++) {
+        if (o <= TCNT(n) + 3 && o + len > TCNT(n) && m->tmu[n].running) tmu_recompute(m, n);
+        if (o <= TCR(n) + 1 && o + len > TCR(n)) {
+            uint16_t tcr = oc16(m, TCR(n));
+            if (m->tmu[n].running) {
+                /* MAME: tcnt = remaining with the OLD divider, then recompute with the new one */
+                oc_set32(m, TCNT(n), tmu_count(m, n, old_tcr[n]));
+                tmu_recompute(m, n);
+            }
+            if (!(tcr & 0x20) || !(tcr & 0x100)) m->tmu[n].req = 0;
+        }
+    }
+}
+
 /* ---------------- memory map ---------------- */
 static inline uint8_t *plain(CV1K *m, uint32_t a)
 {
@@ -279,6 +342,14 @@ static void log_reg(CV1K *m, uint32_t a)
     if (m->reg_used < 64) { m->reg_addr[m->reg_used] = a; m->reg_n[m->reg_used++] = 1; }
 }
 
+#define TMU_RANGE(a) ((a) >= 0xFFFFFE90u && (a) <= 0xFFFFFEBBu)
+#define TMU_PRE(m) uint8_t ot = (m)->onchip[0xFE92]; uint16_t otcr[3] = {oc16((m), TCR(0)), oc16((m), TCR(1)), oc16((m), TCR(2))}
+static uint32_t tmu_read32(CV1K *m, uint32_t a, uint32_t v)
+{
+    for (int n = 0; n < 3; n++) if ((a & 0xFFFF) == TCNT(n) && m->tmu[n].running) return tmu_count(m, n, oc16(m, TCR(n)));
+    return v;
+}
+
 #define TM(m, a, w) do { if ((m)->timing_on && !(m)->dma_active) (m)->cpu.cycles += tm_data(&(m)->tm, (a), (w)); } while (0)
 
 static void onchip_written(CV1K *m, uint32_t a, uint32_t v)
@@ -311,22 +382,26 @@ static uint16_t bus_rw(void *c, uint32_t a)
 static uint32_t bus_rl(void *c, uint32_t a)
 {
     CV1K *m = c; TM(m, a, 0); log_reg(m, a); uint8_t *q = plain(m, a);
-    return q ? (uint32_t)q[0] << 24 | q[1] << 16 | q[2] << 8 | q[3] : dev_read(m, a, 4);
+    uint32_t v = q ? (uint32_t)q[0] << 24 | q[1] << 16 | q[2] << 8 | q[3] : dev_read(m, a, 4);
+    return TMU_RANGE(a) ? tmu_read32(m, a, v) : v;
 }
 static void bus_wb(void *c, uint32_t a, uint8_t v)
 {
     CV1K *m = c; TM(m, a, 1); uint8_t *q = plain(m, a);
+    if (TMU_RANGE(a)) { TMU_PRE(m); *q = v; tmu_written(m, a & 0xFFFF, 1, ot, otcr); return; }
     if (q && P(a) >= 0x00400000u) { *q = v; if (P(a) >= 0x04000120u && P(a) < 0x04000140u) port_out(m, P(a), v); else if ((P(a) & 0xFFFF0000u) == 0x04000000u) area1_written(m, P(a)); }
     else if (!q) dev_write(m, a, v, 1);
 }
 static void bus_ww(void *c, uint32_t a, uint16_t v)
 {
     CV1K *m = c; TM(m, a, 1); uint8_t *q = plain(m, a);
+    if (TMU_RANGE(a)) { TMU_PRE(m); q[0] = v >> 8; q[1] = v; tmu_written(m, a & 0xFFFF, 2, ot, otcr); return; }
     if (q && P(a) >= 0x00400000u) { q[0] = v >> 8; q[1] = v; if ((P(a) & 0xFFFF0000u) == 0x04000000u) area1_written(m, P(a)); } else if (!q) dev_write(m, a, v, 2);
 }
 static void bus_wl(void *c, uint32_t a, uint32_t v)
 {
     CV1K *m = c; TM(m, a, 1); if (a >= 0xF0000000u) onchip_written(m, a, v); uint8_t *q = plain(m, a);
+    if (TMU_RANGE(a)) { TMU_PRE(m); q[0] = v >> 24; q[1] = v >> 16; q[2] = v >> 8; q[3] = v; tmu_written(m, a & 0xFFFF, 4, ot, otcr); return; }
     if (q && P(a) >= 0x00400000u) { q[0] = v >> 24; q[1] = v >> 16; q[2] = v >> 8; q[3] = v; if ((P(a) & 0xFFFF0000u) == 0x04000000u) area1_written(m, P(a)); } else if (!q) dev_write(m, a, v, 4);
 }
 
@@ -341,12 +416,22 @@ void cv1k_vsync(CV1K *m)
 int cv1k_check_irq(CV1K *m)
 {
     SH3 *s = &m->cpu;
-    if (!m->irq2_pending || (s->sr & SR_BL)) return 0;
-    uint32_t prio = (m->area1[0x0016] >> 0) & 0x0F;   /* IPRC high byte bits 11:8 = byte 0x16 low nibble */
-    if (prio <= ((s->sr >> 4) & 15)) return 0;
-    m->irq2_pending = 0;                                 /* HOLD_LINE: cleared on acknowledge */
-    uint32_t intevt = 0x3E0 - prio * 0x20;
-    m->area1[0] = 0; m->area1[1] = 0; m->area1[2] = 0x06; m->area1[3] = 0x40;          /* INTEVT2 = 0x640 */
+    if (s->sr & SR_BL) return 0;
+    uint32_t imask = (s->sr >> 4) & 15, best = 0, code = 0;
+    int src = -1;
+    uint32_t p2 = m->area1[0x0016] & 0x0F;                       /* IPRC[11:8]: IRQ2 */
+    if (m->irq2_pending && p2 > imask) { best = p2; src = 3; code = 0x640; }
+    uint16_t ipra = oc16(m, 0xFEE2);
+    for (int n = 0; n < 3; n++) {
+        uint32_t p = (ipra >> (12 - 4 * n)) & 15;
+        if (m->tmu[n].req && p > imask && p > best) { best = p; src = n; code = 0x400 + 0x20 * n; }
+    }
+    if (src < 0) return 0;
+    m->irq_by_src[src]++;
+    uint32_t intevt;
+    if (src == 3) { m->irq2_pending = 0; intevt = 0x3E0 - best * 0x20; }   /* IRQ2 HOLD_LINE: cleared on acknowledge */
+    else intevt = code;                                                     /* TUNI stays requested until UNF is cleared */
+    m->area1[0] = 0; m->area1[1] = 0; m->area1[2] = code >> 8; m->area1[3] = code;      /* INTEVT2 */
     m->onchip[0xFFD8] = intevt >> 24; m->onchip[0xFFD9] = intevt >> 16; m->onchip[0xFFDA] = intevt >> 8; m->onchip[0xFFDB] = intevt;
     if (m->irq_log && m->irq_log_n < m->irq_log_cap) m->irq_log[m->irq_log_n++] = s->cycles;
     sh3_interrupt(s, 0x600, 0);

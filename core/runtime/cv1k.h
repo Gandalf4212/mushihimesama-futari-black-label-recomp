@@ -45,6 +45,8 @@ typedef struct CV1K {
     Nand nand; Rtc9701 rtc; Blitter blit; Inputs in;
     Timing tm; int timing_on, dma_active;
     int log_regs; uint32_t reg_addr[64]; uint64_t reg_n[64]; int reg_used;   /* debug: on-chip reads */
+    struct { uint64_t next; int running, req; } tmu[3];   /* on-chip TMU (TCOR/TCNT/TCR live in onchip[]) */
+    uint64_t irq_by_src[4];
     int irq2_pending;
     uint32_t dma_irq_pending; uint64_t dma_bytes, dma_count;
     uint64_t frame, irqs_taken, sound_writes;
@@ -62,4 +64,7 @@ int  cv1k_check_irq(CV1K *m);
 void cv1k_vsync(CV1K *m);
 /* TRAPA exception (s->trap set by the instruction): TRA, EXPEVT 0x160, VBR+0x100. */
 void cv1k_take_trap(CV1K *m);
+/* TMU: process underflows up to the current cycle; next_event returns the next timer cycle (or ~0). */
+void cv1k_timers(CV1K *m);
+uint64_t cv1k_next_event(CV1K *m);
 #endif

@@ -177,6 +177,25 @@
    uses it too), `run_headless --dump-ram dir f1,f2,...`, `tools/ram_diff.py a.bin b.bin`.
    Frame mapping: ours = MAME + 1 (with --frame-offset -1). Next: diff MAME ram_02500..02600 vs ours
    ram_02501..02601, find the first differing variables, trace the code that writes them.
+   **ROOT CAUSE FOUND (2026-11-04 night):** the game seeds its RNG with elapsed milliseconds:
+   `srand([0xAC7FF000] + f(5))` at 0x0C066F90, where f(5) (0x0C056EDC) returns the ms counter at
+   0x0C056EA0, incremented by the TMU1 1 kHz interrupt (TCOR1 = TCNT1 = 0x18FF at Pphi/4 = 6.4 MHz; TMU1
+   callback 0x0C056EC8). TMU0 also runs at 1 kHz (priority 6, callback 0x0C062428, small). We had no
+   TMU, so the counter stayed 0 and the seed differed (RNG state 0x0C1E3EB8 differs from frame 2500).
+   **TMU now implemented** (cv1k.c: TSTR/TCOR/TCNT/TCR per MAME sh4tmu.cpp, TUNI0-2 via IPRA, level
+   request until UNF cleared, live TCNT reads; CPU loops schedule timer events via cv1k_next_event /
+   cv1k_timers). Our ms counter now runs at 1 kHz (39,301 at our frame 2511 vs MAME 39,130 at 2500).
+   **New problem:** with the timers running we fall 10 frames further behind MAME during the memory test
+   (MAME 221 -> 401: offset +2 -> -8; attract now -11 instead of -1). IRQ rate is right (2,000/s: both
+   channels, as in MAME - IPRA is mapped for SH3 in MAME too), handlers + callbacks are short, SR IMASK
+   is 0, game idles most of each frame. So the extra cost is not handler size. Next ideas: (1) measure
+   cycles per interrupt in ours (entry -> rte) and per frame in the memory test; (2) MAME accepts IRQs
+   only at DRC entry (CHECKIRQ) after a timeslice ends at the timer, and our backward-branch event checks
+   return without FLUSH: check the pending-acc handling around interrupts (FLUSH vs keep vs DROP);
+   (3) MAME's idle speedup (spin_until_time 10 us at idle PC 0x0C05176A) changes WHEN interrupts land
+   relative to frame work; (4) get a MAME-side cycle/IRQ count via Lua (manager.machine.devices
+   [':maincpu'] state, or a frame-by-frame RAM dump of the ms counter during the memory test).
+   Goal: seed equality requires reaching srand in the same millisecond as MAME.
    Old suspect: MAME's RTC9701 starts at the host's current date/time (ours at 0) and the
    game may read it (RNG seed?) after Start. Check: (a) user runs the same MAME capture twice and we
    compare MAME vs MAME (if they differ, MAME is not deterministic here); (b) count RTC read commands
