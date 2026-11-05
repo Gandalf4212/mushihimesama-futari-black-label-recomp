@@ -196,6 +196,33 @@
    relative to frame work; (4) get a MAME-side cycle/IRQ count via Lua (manager.machine.devices
    [':maincpu'] state, or a frame-by-frame RAM dump of the ms counter during the memory test).
    Goal: seed equality requires reaching srand in the same millisecond as MAME.
+   **Timer-lag investigation (2026-11-05)** (debug instrumentation in run_headless, reverted afterwards):
+   - Lag starts ~frame 240 (boot loading). Main loop at 0x0C063098 does ~1.2 frames of CPU work per
+     iteration (loading, NAND DMA, decompressor 0x0C06D770 called from 0x0C06D438), then `wait(1)` at
+     0x0C051764 (spin on vblank counter 0x0C002310, idle PC 0x0C05176A) -> iterations take 1 or 2 frames,
+     so a ~1-2 % CPU increase pushes iterations past a vblank and loses whole frames (quantization).
+     Frames 150-400: 149 iterations with TMU vs 155 without.
+   - Only **TUNI0** matters: TUNI1 alone (ms counter, prio 1) gives exactly the no-TMU timeline. TUNI0
+     (prio 6, IPRA 0x6100, callback 0x0C062428) is the 1 kHz sound-driver tick (cmd queue 0x0C062240,
+     8 channels x 56 B at 0x0C062250); cost ~709 cycles/IRQ (TUNI1+vblank ~318) = ~0.7 % CPU.
+   - Main-thread work per iteration (excl. IRQ time): 2.033M cycles with TUNI0 vs 2.019M without (+0.7 %).
+     Decompressor cost per call is identical (1.47M) and its call count the same (33 vs 34).
+   - Making IRQ handlers free (no cycles, no cache effects) removes about half the lag (equal at 400,
+     still behind at 440). Remaining half = effect on the interrupted main thread.
+   - Ruled out: RNG seed (forcing RNG=0 at 156 changes nothing), TCNT polling (game never reads TMU
+     regs), DMA from IRQ (none), preemptive task switch (all IRQs return to SPC), sound gating (with
+     stage1 inputs our sound queue = MAME: 0x134 commands at 2500, same request entry).
+   - MAME check (sh4comn.cpp/sh4.h/sh4tmu.cpp, BSD-3): TUNI stays requested until UNF cleared (same as
+     ours), source picked by highest priority (same), SH3 IRQ entry costs no cycles (same); MAME also
+     writes EXPEVT for interrupts (we don't; game dispatches on INTEVT2 0xA4000000 so harmless);
+     MAME timer fires after TCNT ticks (`ticks = tcnt`), ours after TCNT+1 (tiny).
+   - Conclusion: MAME's main thread must have ~1 % more headroom per iteration; before TMU we matched
+     MAME only because the missing IRQ load hid it. Candidates: (a) cost of resuming the main thread
+     after an event exit (pending ACC kept across IRQ, then the handler's first not-taken branch DROPs
+     it; re-entry fetch/cache-line state), (b) handler cost vs MAME (uncached/P4 register accesses in
+     the handlers, vector path 0x8C000600 -> table 0x0C001000), (c) residual base-model error.
+   - **Need MAME data**: `ramdump.bat stage1.txt 150,160,...,400` (fresh nvram; inputs only start at ~2260) so we can find the
+     first loading iteration where MAME is a frame ahead and compare cycles per iteration.
    Old suspect: MAME's RTC9701 starts at the host's current date/time (ours at 0) and the
    game may read it (RNG seed?) after Start. Check: (a) user runs the same MAME capture twice and we
    compare MAME vs MAME (if they differ, MAME is not deterministic here); (b) count RTC read commands
