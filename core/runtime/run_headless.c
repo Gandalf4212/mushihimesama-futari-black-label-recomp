@@ -63,7 +63,7 @@ int main(int argc, char **argv)
     if (!cv1k_init(&m, argv[1], argv[2], strtoul(argv[3], 0, 16))) return 1;
     uint32_t entry = strtoul(argv[4], 0, 16);
     uint64_t frames = strtoull(argv[5], 0, 10);
-    int interp = 0, timing = 1, report = 60; uint64_t st_from = ~0ull, st_to = 0, st_c0 = 0, st_i0 = 0; Timing st0; const char *misses = NULL, *pngdir = NULL; int png_every = 0; const char *dump_dir = NULL; char dump_list[512] = ""; uint64_t png_from = 0, png_to = ~0ull;
+    int interp = 0, timing = 1, report = 60; uint64_t st_from = ~0ull, st_to = 0, st_c0 = 0, st_i0 = 0; Timing st0; const char *misses = NULL, *pngdir = NULL; int png_every = 0; const char *dump_dir = NULL; char dump_list[16384] = ""; uint64_t png_from = 0, png_to = ~0ull;
     for (int i = 6; i < argc; i++) {
         if (!strcmp(argv[i], "--interp")) interp = 1;
         if (!strcmp(argv[i], "--watch-log") && i + 2 < argc) { g_watch_log = fopen(argv[++i], "w"); for (char *t = strtok(argv[++i], ","); t && g_nwatch < 16; t = strtok(NULL, ",")) g_watch[g_nwatch++] = (uint32_t)strtoul(t, 0, 16); }

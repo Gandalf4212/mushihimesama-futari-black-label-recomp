@@ -243,6 +243,23 @@
      F:\claude2\fbl\mame_watch.txt; then `run_headless ... 600 --watch-log ours.txt
      0C051040,0C002310,0C056EA0` and `watch_diff.py`: shows which game frames take 2 vblanks in ours
      but 1 in MAME.**
+   - **Per-game-frame work timing vs MAME (2026-11-05, flaglog.lua -> F:\claude2\fbl\mame_flags.txt):**
+     main loop (0x0C063098) sets flag 0x0C1DE144 when a game frame is done, vblank handler 0x0C062F20
+     kicks the flip and clears it. Boot screen = 4-frame cycle: 3 light frames (~8-9 ms work) + 1 heavy
+     (~33 ms, just under 2 vblanks = 33.32 ms; a heavy frame over that spills to a 3rd vblank = the lag).
+     Before fixes: light k%4=0 +1.2 %, k%4=1 **-5.6 % (-0.52 ms)**, k%4=2 0 %, heavy +0.63 %.
+     **Fixed (MAME parity):** (1) DMAC: auto-request transfers set CHCR.TE (+DEI) 2*count+1 CPU cycles
+     after the start, data/SAR/DAR/TCR immediately, no restart while in flight (sh4dmac.cpp) -> k%4=1
+     frame now +1.1 %; (2) blitter busy-time model ported from cv1k_v.cpp (list walk: SRAM clocks for
+     uploads, VRAM clocks for clipped draws, idle-op chunks, h-line fetch overhead; +0x10 ready bit
+     reads 0 until done). Both only with timing on. RAM still matches MAME exactly from 270 on.
+     **Now: every frame type ~+1 % (light +0.10 ms, heavy +0.21 ms)** -> heavy frames still spill;
+     boot offset 160 +1 ... 270 +10 ... 360-400 +14 (worse than +8 because the missing DMA delay used to
+     hide the overcharge). With TMU off: light +0.5 %, heavy -0.4 % -> our TMU interrupts cost ~1 %
+     (per IRQ in 220-270: TUNI0 671 cycles = ~275 base + 257 data pen (95 acc, 8.8 miss) + 139 fetch
+     pen (4.4 miss); TUNI1 137; vblank IRQ2 2623), MAME's apparently ~half. Next: find why MAME's
+     interrupt cost is lower (pending ACC handling across the interrupt / DROP in the handler, IRQ
+     entry/RTE costs, cache state) and the ~0.5 % fixed per-frame excess (light frames, TMU off).
    Old suspect: MAME's RTC9701 starts at the host's current date/time (ours at 0) and the
    game may read it (RNG seed?) after Start. Check: (a) user runs the same MAME capture twice and we
    compare MAME vs MAME (if they differ, MAME is not deterministic here); (b) count RTC read commands

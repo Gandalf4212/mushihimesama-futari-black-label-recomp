@@ -155,6 +155,76 @@ static void rtc_write(Rtc9701 *r, uint8_t v)
     r->clk = clk;
 }
 
+/* ---------------- blitter busy time (model per MAME cv1k_v.cpp, BSD-3, David Haywood, Luca Elia,
+ * MetalliC; based on buffi's CV1000 blitter research). On every kick the display list is walked and
+ * its duration estimated from VRAM/SRAM clock counts; the ready bit (+0x10) reads 0 until then. ---- */
+enum { BL_VRAM_CLK_NS = 13, BL_SRAM_CLK_NS = 20, BL_HLINE_PERIOD_NS = 63600, BL_HLINE_DURATION_NS = 2160,
+       BL_DRAW_OP_BYTES = 20, BL_CLIP_OP_BYTES = 2, BL_CLIP_MARGIN = 32, BL_CHUNK_BYTES = 64, BL_CHUNK_NS = 700 };
+static uint16_t bl_word(CV1K *m, uint32_t *a) { uint32_t o = *a & (m->ram_size - 1); *a += 2; return (uint16_t)(m->ram[o] << 8 | m->ram[o + 1]); }
+static void bl_idle(Blitter *b, uint64_t *ns, int bytes)
+{
+    b->idle_op_bytes += bytes;
+    if (b->idle_op_bytes >= BL_CHUNK_BYTES) { b->idle_op_bytes -= BL_CHUNK_BYTES; *ns += BL_CHUNK_NS; }
+}
+static uint16_t bl_vram_rows(uint16_t sx, uint16_t sy, uint16_t dx, uint16_t dy)
+{
+    int x_rows = 0, rows = 0;
+    for (int xp = dx; xp > 0; xp -= 32) { x_rows++; if (((sx & 31) + (xp < 32 ? xp : 32)) > 32) x_rows++; }
+    for (int yp = dy; yp > 0; yp -= 32) { rows += x_rows; if (((sy & 31) + (yp < 32 ? yp : 32)) > 32) rows += x_rows; }
+    return (uint16_t)rows;
+}
+static uint64_t blit_duration_ns(CV1K *m)
+{
+    Blitter *b = &m->blit;
+    uint32_t a = b->gfx_addr & 0x1FFFFFFFu;
+    int cx = (int)b->clip_x, cy = (int)b->clip_y;
+    int min_x = cx - BL_CLIP_MARGIN, max_x = cx + 320 - 1 + BL_CLIP_MARGIN, min_y = cy - BL_CLIP_MARGIN, max_y = cy + 240 - 1 + BL_CLIP_MARGIN;
+    uint64_t ns = 0;
+    for (int guard = 0; guard < 1 << 20; guard++) {
+        uint16_t op = bl_word(m, &a);
+        switch (op & 0xF000) {
+        case 0x0000: case 0xF000: goto done;
+        case 0xC000:
+            if (bl_word(m, &a)) { min_x = cx - BL_CLIP_MARGIN; max_x = cx + 320 - 1 + BL_CLIP_MARGIN; min_y = cy - BL_CLIP_MARGIN; max_y = cy + 240 - 1 + BL_CLIP_MARGIN; }
+            else { min_x = 0; max_x = 0x2000 - 1; min_y = 0; max_y = 0x1000 - 1; }
+            bl_idle(b, &ns, BL_CLIP_OP_BYTES);
+            break;
+        case 0x2000: {                                       /* upload: header + pixels over the SRAM bus */
+            a += 10;
+            uint32_t w = (bl_word(m, &a) & 0x1FFF) + 1, h = (bl_word(m, &a) & 0x0FFF) + 1;
+            a += w * h * 2;
+            ns += (uint64_t)((16 + w * h * 2) / 4) * BL_SRAM_CLK_NS;
+            b->idle_op_bytes = 0;
+            break; }
+        case 0x1000: {                                       /* draw */
+            a += 2;
+            uint16_t sx = bl_word(m, &a), sy = bl_word(m, &a), dx0 = bl_word(m, &a), dy0 = bl_word(m, &a);
+            uint16_t w = (uint16_t)((bl_word(m, &a) & 0x1FFF) + 1), h = (uint16_t)((bl_word(m, &a) & 0x0FFF) + 1);
+            a += 4;
+            uint16_t dx1 = (uint16_t)(dx0 + w - 1), dy1 = (uint16_t)(dy0 + h - 1);
+            if (dx0 > max_x || dx1 < min_x || dy0 > max_y || dy1 < min_y) { bl_idle(b, &ns, BL_DRAW_OP_BYTES); break; }
+            uint16_t cminx = (uint16_t)min_x, cminy = (uint16_t)min_y, cmaxx = (uint16_t)max_x, cmaxy = (uint16_t)max_y;
+            if (dx0 < cminx) dx0 = cminx;
+            if (dy0 < cminy) dy0 = cminy;
+            if (dx1 > cmaxx) dx1 = cmaxx;
+            if (dy1 > cmaxy) dy1 = cmaxy;
+            w = (uint16_t)(dx1 - dx0 + 1); h = (uint16_t)(dy1 - dy0 + 1);
+            b->idle_op_bytes = 0;
+            int src_rows = bl_vram_rows(sx, sy, w, h), dst_rows = bl_vram_rows(dx0, dy0, w, h);
+            dx0 = (uint16_t)(dx0 - (dx0 & 3));
+            dx1 = (uint16_t)(dx1 + ((4 - ((dx1 + 1) & 3)) & 3));
+            uint16_t dw = (uint16_t)(dx1 - dx0 + 1), dh = (uint16_t)(dy1 - dy0 + 1);
+            uint32_t clk = (uint32_t)(w * h / 4 + dw * dh / 2 + src_rows * 6 + dst_rows * (20 + 11) + 12);
+            ns += (uint64_t)clk * BL_VRAM_CLK_NS;
+            break; }
+        default: goto done;                                  /* MAME: popmessage + stop */
+        }
+    }
+done:
+    ns += ns / BL_HLINE_PERIOD_NS * BL_HLINE_DURATION_NS;    /* VRAM line fetches for video output */
+    return ns;
+}
+
 /* ---------------- on-chip TMU (behavior per MAME sh4tmu.cpp, BSD-3) ----------------
  * TSTR 0xFFFFFE92; channel n: TCOR 0xFE94+12n, TCNT 0xFE98+12n, TCR 0xFE9C+12n (16-bit).
  * Counts down at Pphi/div, Pphi = CPU/4 (MD = 0); underflow reloads TCOR, sets UNF (TCR b8) and, with
@@ -174,8 +244,10 @@ static uint32_t tmu_count(CV1K *m, int n, uint16_t tcr)       /* MAME compute_ti
 }
 static void tmu_recompute(CV1K *m, int n) { m->tmu[n].next = m->cpu.cycles + ((uint64_t)oc32(m, TCNT(n)) + 1) * tmu_tick(m, n, oc16(m, TCR(n))); }
 
+static void dmac_complete(CV1K *m);
 void cv1k_timers(CV1K *m)
 {
+    dmac_complete(m);
     for (int n = 0; n < 3; n++)
         while (m->tmu[n].running && m->cpu.cycles >= m->tmu[n].next) {
             uint32_t tcor = oc32(m, TCOR(n));
@@ -191,6 +263,7 @@ uint64_t cv1k_next_event(CV1K *m)
 {
     uint64_t e = ~0ull;
     for (int n = 0; n < 3; n++) if (m->tmu[n].running && m->tmu[n].next < e) e = m->tmu[n].next;
+    for (int ch = 0; ch < 4; ch++) if (m->dma_te_pending[ch] && m->dma_te_at[ch] < e) e = m->dma_te_at[ch];
     return e;
 }
 
@@ -253,7 +326,7 @@ static uint32_t dev_read(CV1K *m, uint32_t a, int size)
     if (p >= 0x10C00000u && p < 0x10C00008u) return 0;
     if (p >= 0x18000000u && p < 0x18000058u) {
         switch (p & 0xFC) {
-        case 0x10: return 0x10;            /* blitter ready */
+        case 0x10: return m->cpu.cycles >= m->blit.busy_until ? 0x10 : 0;   /* ready unless busy (blit_duration_ns) */
         case 0x24: case 0x28: return 0xFFFFFFFFu;
         case 0x50: return m->in.dsw;
         }
@@ -275,7 +348,9 @@ static void dev_write(CV1K *m, uint32_t a, uint32_t v, int size)
     if (p >= 0x18000000u && p < 0x18000058u) {
         Blitter *b = &m->blit;
         switch (p & 0xFC) {
-        case 0x04: if (v & 1) { b->execs++; b->last_list = b->gfx_addr; if (b->on_exec) b->on_exec(b->ctx, b->gfx_addr); } break;
+        case 0x04: if (v & 1) { b->execs++; b->last_list = b->gfx_addr;
+            if (m->timing_on) { uint64_t ns = blit_duration_ns(m); b->last_delay_ns = ns; b->busy_until = m->cpu.cycles + (ns * 1024 + 9999) / 10000; }   /* 102.4 cycles/us */
+            if (b->on_exec) b->on_exec(b->ctx, b->gfx_addr); } break;
         case 0x08: b->gfx_addr = v; break;
         case 0x14: b->scroll_x = v; break;
         case 0x18: b->scroll_y = v; break;
@@ -298,7 +373,7 @@ static void dmac_kick(CV1K *m, int ch)
     uint32_t base = 0x20 + ch * 0x10;
     uint32_t chcr = a1_32(m, base + 0xC);
     uint16_t dmaor = (uint16_t)(m->area1[0x60] << 8 | m->area1[0x61]);
-    if (!(chcr & 1) || (chcr & 2) || !(dmaor & 1)) return;      /* DE, !TE, DME */
+    if (!(chcr & 1) || (chcr & 2) || !(dmaor & 1) || m->dma_te_pending[ch]) return;   /* DE, !TE, DME, not in flight */
     uint32_t sar = a1_32(m, base), dar = a1_32(m, base + 4), n = a1_32(m, base + 8) & 0xFFFFFF;
     if (!n) n = 0x1000000;
     static const int sizes[4] = {1, 2, 4, 16};
@@ -314,8 +389,23 @@ static void dmac_kick(CV1K *m, int ch)
     }
     m->dma_bytes += (uint64_t)n * sz; m->dma_count++; m->dma_active = 0;
     a1_set32(m, base, sar); a1_set32(m, base + 4, dar); a1_set32(m, base + 8, 0);
+    if (m->timing_on) {   /* MAME (sh4dmac.cpp, BSD-3): data moves now, TE (+DEI) after 2*count+1 CPU cycles */
+        m->dma_te_pending[ch] = 1; m->dma_te_at[ch] = m->cpu.cycles + 2ull * n + 1;
+        return;
+    }
     a1_set32(m, base + 0xC, chcr | 2);                                /* TE */
     if (chcr & 4) m->dma_irq_pending |= 1 << ch;                       /* IE: DEI interrupt (not routed yet) */
+}
+
+static void dmac_complete(CV1K *m)
+{
+    for (int ch = 0; ch < 4; ch++)
+        if (m->dma_te_pending[ch] && m->cpu.cycles >= m->dma_te_at[ch]) {
+            uint32_t base = 0x20 + ch * 0x10, chcr = a1_32(m, base + 0xC);
+            m->dma_te_pending[ch] = 0;
+            a1_set32(m, base + 8, 0); a1_set32(m, base + 0xC, chcr | 2);    /* TCR = 0, TE */
+            if (chcr & 4) m->dma_irq_pending |= 1 << ch;
+        }
 }
 
 static void area1_written(CV1K *m, uint32_t p)

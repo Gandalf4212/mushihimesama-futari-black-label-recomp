@@ -26,6 +26,7 @@ typedef struct {
 typedef struct {
     uint32_t gfx_addr, scroll_x, scroll_y, clip_x, clip_y;
     uint64_t execs; uint32_t last_list;
+    uint64_t busy_until; uint32_t idle_op_bytes; uint64_t last_delay_ns;   /* busy-time model (MAME cv1k_v.cpp) */
     uint32_t fw_port, fw_pos; uint8_t fw_sum_valid;
     void (*on_exec)(void *ctx, uint32_t list_addr);  /* renderer hook */
     void *ctx;
@@ -49,6 +50,7 @@ typedef struct CV1K {
     uint64_t irq_by_src[4];
     int irq2_pending;
     uint32_t dma_irq_pending; uint64_t dma_bytes, dma_count;
+    uint64_t dma_te_at[4]; uint8_t dma_te_pending[4];   /* MAME sh4dmac.cpp: TE set 2*count+1 cycles after start */
     uint64_t frame, irqs_taken, sound_writes;
     uint64_t cycles_per_frame;
     uint64_t next_vsync;
