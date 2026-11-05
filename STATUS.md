@@ -221,8 +221,25 @@
      after an event exit (pending ACC kept across IRQ, then the handler's first not-taken branch DROPs
      it; re-entry fetch/cache-line state), (b) handler cost vs MAME (uncached/P4 register accesses in
      the handlers, vector path 0x8C000600 -> table 0x0C001000), (c) residual base-model error.
-   - **Need MAME data**: `ramdump.bat stage1.txt 150,160,...,400` (fresh nvram; inputs only start at ~2260) so we can find the
-     first loading iteration where MAME is a frame ahead and compare cycles per iteration.
+   - **MAME boot RAM dumps** (F:\claude2\fbl\mame_ram_boot, frames 150-400 every 10, fresh nvram):
+     MAME's vblank counter 0x0C002310 and ms counter run exactly 1 frame ahead of ours (known -1
+     offset); MAME seeds the boot RNG at ms 45 (0x2D), ours at 43 (0x2B). Best whole-RAM match
+     offset (ours frame - MAME frame, exact match = 0 differing 16-byte blocks from 270 on):
+     TMU on : 170-210 -1/-2, 220 -1, 230 0, 240 +1, 250 +2, 260 +3, 270 +4, 300 +5, 340 +7, 360-400 +8
+     TMU off: 170-260 -2, 270-310 -1, 320-400 0
+     0x0C051040 = game frame-flip counter (each +1 kicks a blitter list, 0x0C0510C4/0x0C0511E0):
+     MAME renders 0.80 game frames per vblank in 200-280 (built-in slowdown), ours 0.76 (TMU off) /
+     0.71 (TMU on). So the boot-screen frames need ~1 vblank of CPU work each and a 1-2 % timing error
+     flips frames between 1 and 2 vblanks. **We were already slightly too slow before TMU** (fewer
+     flips than MAME); TUNI0's ~1 % only made it visible. Target: find the ~1-2 % overcharge (data
+     penalties are 28 % of all cycles in 220-270: 24.1M of 85.3M; fetch 1.1M; uncached accesses 679k).
+   - New tooling: `run_headless --kick-log file` + `tools/mame/kicklog.lua/.bat` (MAME write tap on the
+     blitter execute register, logs the emulated time of every kick) + `tools/kick_diff.py mame ours`
+     (pairs the n-th kick, prints the difference in frames and where it jumps). Kicks from #50 on are
+     vblank-locked; before that (boot loading) the kick times measure CPU progress directly.
+     **Next: user runs `kicklog.bat stage1.txt 600` (nvram deleted), copies kicks.txt to
+     F:\claude2\fbl\mame_kicks.txt; we run `run_headless ... 600 --kick-log ours.txt` and diff.** The
+     boot kicks 0-49 (frames 155-203) give MAME's exact CPU progress to compare per phase.
    Old suspect: MAME's RTC9701 starts at the host's current date/time (ours at 0) and the
    game may read it (RNG seed?) after Start. Check: (a) user runs the same MAME capture twice and we
    compare MAME vs MAME (if they differ, MAME is not deterministic here); (b) count RTC read commands

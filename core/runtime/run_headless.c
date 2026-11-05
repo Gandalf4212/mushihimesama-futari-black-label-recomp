@@ -8,11 +8,14 @@
 
 static BlitRef g_blit;
 static CV1K *g_m;
-static void on_exec(void *ctx, uint32_t list) { (void)ctx; blit_ref_exec(&g_blit, g_m->ram, g_m->ram_size - 1, list, g_m->blit.clip_x, g_m->blit.clip_y); }
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+static FILE *g_kick_log;   /* --kick-log */
+static void on_exec(void *ctx, uint32_t list) { (void)ctx;
+    if (g_kick_log) fprintf(g_kick_log, "%llu %.9f\n", (unsigned long long)g_m->frame, (double)g_m->cpu.cycles / (double)CV1K_CPU_HZ);   /* same format as tools/mame/kicklog.lua */
+    blit_ref_exec(&g_blit, g_m->ram, g_m->ram_size - 1, list, g_m->blit.clip_x, g_m->blit.clip_y); }
 
 /* Input script (shared with tools/mame/capture.lua): lines "start_frame duration TOKEN...".
  * Tokens: COIN1 COIN2 START1 START2 SERVICE TEST, UP DOWN LEFT RIGHT B1..B4 (P1), P2_UP..P2_B4. */
@@ -61,6 +64,7 @@ int main(int argc, char **argv)
     int interp = 0, timing = 1, report = 60; uint64_t st_from = ~0ull, st_to = 0, st_c0 = 0, st_i0 = 0; Timing st0; const char *misses = NULL, *pngdir = NULL; int png_every = 0; const char *dump_dir = NULL; char dump_list[512] = ""; uint64_t png_from = 0, png_to = ~0ull;
     for (int i = 6; i < argc; i++) {
         if (!strcmp(argv[i], "--interp")) interp = 1;
+        if (!strcmp(argv[i], "--kick-log") && i + 1 < argc) g_kick_log = fopen(argv[++i], "w");   /* time of every blitter kick */
         if (!strcmp(argv[i], "--tmstats") && i + 2 < argc) { st_from = strtoull(argv[++i], 0, 10); st_to = strtoull(argv[++i], 0, 10); }
         if (!strcmp(argv[i], "--timing") && i + 1 < argc) timing = strcmp(argv[++i], "off") != 0;
         if (!strcmp(argv[i], "--report") && i + 1 < argc) report = atoi(argv[++i]);

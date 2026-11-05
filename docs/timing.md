@@ -29,8 +29,10 @@ read routine) cannot appear at all until memory costs are modeled.
 - Register fields: WCR1/WCR2 (bus wait states per area), MCR (tpc, rcd, trwl, tras), BCR2 (bus width →
   line fetch count). The game programs these during boot via GBR-relative writes to `0xFFFFFFxx`
   (we already store them in `onchip[]`; addresses from the SH7709S manual / MAME sh3comn.cpp).
-- Device accesses also call `update_access_cycles` (cv1k.cpp: NAND `0xB000000x`, sound `0xB040000x`,
-  RTC `0xB0C0000x`, blitter `0xB800xxxx`): same penalty function on uncached addresses.
+- Device accesses (NAND `0xB000000x`, sound `0xB040000x`, RTC `0xB0C0000x`, blitter `0xB800xxxx`) pay the
+  same penalty function on uncached addresses. In MAME 0.289 this comes from the sh7709s.cpp DRC hooks
+  (`drc_memory_access_read/write` on every memory access, `drc_update_icache` per group 0/4/15 opcode),
+  not from cv1k.cpp (which has no penalty calls).
 - Base instruction cycles: from MAME's SH DRC front end (`sh_fe.cpp` opcode cycles; most 1, mul/mac/
   div/ldc SR etc. more). Read `sh_fe.cpp` only for the cycle table.
 - Other MAME timing to mirror: blitter busy time (`m_blit_delay_ns`, cv1k_v.cpp, from VRAM row
