@@ -13,6 +13,7 @@ static CV1K *g_m;
 #include <string.h>
 #include <time.h>
 static FILE *g_kick_log;   /* --kick-log */
+static FILE *g_chg_log; static uint32_t g_chg_addr, g_chg_prev = 0xFFFFFFFFu;   /* --change-log (tools/mame/flaglog.lua format) */
 static FILE *g_watch_log; static uint32_t g_watch[16]; static int g_nwatch;   /* --watch-log (tools/mame/watchlog.lua format) */
 static void on_exec(void *ctx, uint32_t list) { (void)ctx;
     if (g_kick_log) fprintf(g_kick_log, "%llu %.9f\n", (unsigned long long)g_m->frame, (double)g_m->cpu.cycles / (double)CV1K_CPU_HZ);   /* "<frame> <seconds>" per blitter kick */
@@ -66,6 +67,7 @@ int main(int argc, char **argv)
     for (int i = 6; i < argc; i++) {
         if (!strcmp(argv[i], "--interp")) interp = 1;
         if (!strcmp(argv[i], "--watch-log") && i + 2 < argc) { g_watch_log = fopen(argv[++i], "w"); for (char *t = strtok(argv[++i], ","); t && g_nwatch < 16; t = strtok(NULL, ",")) g_watch[g_nwatch++] = (uint32_t)strtoul(t, 0, 16); }
+        if (!strcmp(argv[i], "--change-log") && i + 2 < argc) { g_chg_log = fopen(argv[++i], "w"); g_chg_addr = (uint32_t)strtoul(argv[++i], 0, 16); }
         if (!strcmp(argv[i], "--kick-log") && i + 1 < argc) g_kick_log = fopen(argv[++i], "w");   /* time of every blitter kick */
         if (!strcmp(argv[i], "--tmstats") && i + 2 < argc) { st_from = strtoull(argv[++i], 0, 10); st_to = strtoull(argv[++i], 0, 10); }
         if (!strcmp(argv[i], "--timing") && i + 1 < argc) timing = strcmp(argv[++i], "off") != 0;
@@ -97,6 +99,7 @@ int main(int argc, char **argv)
         else if (interp) sh3_step(s);
         else dispatch_step(s);
         if (s->trap) cv1k_take_trap(&m);
+        if (g_chg_log) { uint32_t v = ram32(&m, g_chg_addr); if (v != g_chg_prev) { fprintf(g_chg_log, "%llu %.9f %08x\n", (unsigned long long)m.frame, (double)s->cycles / (double)CV1K_CPU_HZ, v); g_chg_prev = v; } }
         cv1k_timers(&m);
         if (s->cycles >= m.next_vsync) {
             cv1k_vsync(&m); m.next_vsync += m.cycles_per_frame; if (g_nev) apply_inputs(&m);
