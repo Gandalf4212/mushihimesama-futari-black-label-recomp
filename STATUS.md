@@ -116,9 +116,12 @@
   capture.lua input tokens fixed (P1_/P2_ prefixes via token_to_input_type's player).
   `run_headless --tmstats a b`: cycle breakdown (penalties, misses, uncached accesses) for frames a..b.
 
+- **Fresh-nvram recapture** (F:\claude2\fbl\mame_snaps_attract-3, frames 1..2091 every 10, MAME nvram
+  deleted first): all 16 sampled frames 211-2091 match exactly, incl. EEPROM INITIALIZE screens.
+  Offsets (MAME - ours): +3 at 211-221, 0 at 401, -1 from 801 to 2091 (constant).
+
 ## Next
-1. Recapture with fresh nvram: `capture.bat 1 2100 10` → compare boot + EEPROM init path. Then find the
-   remaining 1-3 frame differences (first screen +3, then -1): suspects = interpreter lacks branch-target
+1. Optional polish: the remaining 1-3 frame differences (first screen +3, then -1): suspects = interpreter lacks branch-target
    flushes during boot, MAME DRC block/sequence boundaries (max sequence length, page splits), IRQ
    acceptance points (MAME checks at update points), cache initial state.
 2. Gameplay capture with inputs (now that capture.lua inputs work), blitter busy-time model.
