@@ -233,13 +233,16 @@
      flips frames between 1 and 2 vblanks. **We were already slightly too slow before TMU** (fewer
      flips than MAME); TUNI0's ~1 % only made it visible. Target: find the ~1-2 % overcharge (data
      penalties are 28 % of all cycles in 220-270: 24.1M of 85.3M; fetch 1.1M; uncached accesses 679k).
-   - New tooling: `run_headless --kick-log file` + `tools/mame/kicklog.lua/.bat` (MAME write tap on the
-     blitter execute register, logs the emulated time of every kick) + `tools/kick_diff.py mame ours`
-     (pairs the n-th kick, prints the difference in frames and where it jumps). Kicks from #50 on are
-     vblank-locked; before that (boot loading) the kick times measure CPU progress directly.
-     **Next: user runs `kicklog.bat stage1.txt 600` (nvram deleted), copies kicks.txt to
-     F:\claude2\fbl\mame_kicks.txt; we run `run_headless ... 600 --kick-log ours.txt` and diff.** The
-     boot kicks 0-49 (frames 155-203) give MAME's exact CPU progress to compare per phase.
+   - Tooling: `run_headless --kick-log file` (emulated time of every blitter kick) and
+     `--watch-log file addr,addr,...` (RAM words after every vsync) + `tools/mame/watchlog.lua/.bat`
+     (same per-frame RAM-word log from MAME) + `tools/watch_diff.py mame ours` (first frame of every
+     value of a progress counter, prints the offset each time it changes). A MAME Lua write tap on the
+     blitter registers (0x18000000-7F, 64-bit program space) made MAME 0.289 exit right after
+     install (no Lua error, no nvram written), so the kick-time logger was dropped on the MAME side.
+     **Next: user runs `watchlog.bat stage1.txt 600` (nvram deleted), copies watch.txt to
+     F:\claude2\fbl\mame_watch.txt; then `run_headless ... 600 --watch-log ours.txt
+     0C051040,0C002310,0C056EA0` and `watch_diff.py`: shows which game frames take 2 vblanks in ours
+     but 1 in MAME.**
    Old suspect: MAME's RTC9701 starts at the host's current date/time (ours at 0) and the
    game may read it (RNG seed?) after Start. Check: (a) user runs the same MAME capture twice and we
    compare MAME vs MAME (if they differ, MAME is not deterministic here); (b) count RTC read commands
