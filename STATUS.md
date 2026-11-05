@@ -142,6 +142,9 @@
   `--config file` override). Free play is a frontend feature for now; a later option is setting the
   game's own FREE PLAY in its NAND settings.
 
+- **Windows test build 2 (2026-11-05, futaribl_windows_test2.zip, commit 22eb817)**: user report: game
+  runs, CLI switches work, smooth, feels similar to the original (no overlay yet to measure).
+
 ## Decisions (2026-11-04)
 - **No Vulkan blitter.** The CPU reference blitter (MAME-exact) renders the game image; the GPU is used
   only for presentation. Milestone 8 is now: **GPU presentation layer on SDL3's GPU API** (Vulkan /
