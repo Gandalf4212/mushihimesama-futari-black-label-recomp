@@ -159,7 +159,16 @@
    output; headless WAV dump for checking against MAME (`mame -wavwrite`).
 2. GPU presentation layer (SDL3 GPU) + CRT/curved shaders + bezels.
 3. F1 menu + overlay (needs a small bitmap font: write our own 8x8 font, no third-party font files).
-4. Stage-1 gameplay comparison when mame_snaps_stage1 exists.
+4. **Stage-1 gameplay comparison (first try, 2026-11-04)**: MAME capture F:\claude2\fbl\mame_snaps_stage1
+   (2400-4200 every 10, stage1.txt, fresh nvram). Ours with --frame-offset -1: MAME 2500 (mode select)
+   identical; from 2600 (character select) on no exact match (closest differs by ~8.5k pixels at 2600;
+   gameplay at 3200 is the same scene but a different state). Input offsets 0 and -2 give no matches
+   either. Leading suspect: MAME's RTC9701 starts at the host's current date/time (ours at 0) and the
+   game may read it (RNG seed?) after Start. Check: (a) user runs the same MAME capture twice and we
+   compare MAME vs MAME (if they differ, MAME is not deterministic here); (b) count RTC read commands
+   (cmd 0x8) in our run after frame 2260; (c) if RTC matters, add a fixed RTC time option on both sides
+   (MAME: Lua can't easily set it - may need -nvram with a prepared rtc file, or compare using our
+   --rtc set to MAME's start time).
 0. Stage-1 gameplay comparison: user runs (nvram deleted) `capture.bat 2400 4200 10 stage1.txt`,
    copies to F:\claude2\fbl\mame_snaps_stage1; ours: run_headless ... 4300 --input
    games/futaribl/inputs/stage1.txt --frame-offset -1 --png dir 1 --png-range 2350 4300; frame_check.
