@@ -112,12 +112,12 @@ int main(int argc, char **argv)
     if (!timing) cv1k_set_timing(&m, 0);
     if (g_idle_pc) cv1k_set_idle(&m, g_idle_pc, 0x0C002310u);   /* TODO: ram var from game.json */
     if (g_real_fetch) s->stale_fetch = 0;
-    m.next_vsync = m.cycles_per_frame;                                       /* frames count from power-on, like MAME */
+    m.next_vsync = cv1k_vsync_at(0);                                       /* frames count from power-on, like MAME */
     while ((s->pc & 0x1FFFFFFFu) != (entry & 0x1FFFFFFFu)) {                 /* boot on the interpreter */
         { uint64_t te = cv1k_next_event(&m); s->event_at = te < m.next_vsync ? te : m.next_vsync; }
         sh3_step(s);
         cv1k_timers(&m);
-        if (s->cycles >= m.next_vsync) { cv1k_vsync(&m); m.next_vsync += m.cycles_per_frame;
+        if (s->cycles >= m.next_vsync) { cv1k_vsync(&m); m.next_vsync = cv1k_vsync_at(m.frame);
             if (g_watch_log) { fprintf(g_watch_log, "%llu", (unsigned long long)m.frame); for (int w = 0; w < g_nwatch; w++) fprintf(g_watch_log, " %08x", ram32(&m, g_watch[w])); fputc('\n', g_watch_log); }
             if (dump_dir) { char key[32]; snprintf(key, sizeof key, ",%llu,", (unsigned long long)m.frame); if (strstr(dump_list, key)) { char path[512]; snprintf(path, sizeof path, "%s/ram_%05llu.bin", dump_dir, (unsigned long long)m.frame); FILE *f = fopen(path, "wb"); if (f) { fwrite(m.ram, 1, m.ram_size, f); fclose(f); } } } }
     }
@@ -136,7 +136,7 @@ int main(int argc, char **argv)
         if (g_chg_log) { uint32_t v = ram32(&m, g_chg_addr); if (v != g_chg_prev) { fprintf(g_chg_log, "%llu %.9f %08x\n", (unsigned long long)m.frame, (double)s->cycles / (double)CV1K_CPU_HZ, v); g_chg_prev = v; } }
         cv1k_timers(&m);
         if (s->cycles >= m.next_vsync) {
-            cv1k_vsync(&m); m.next_vsync += m.cycles_per_frame; if (g_nev) apply_inputs(&m);
+            cv1k_vsync(&m); m.next_vsync = cv1k_vsync_at(m.frame); if (g_nev) apply_inputs(&m);
             if (m.ymz) wav_drain(&m);
             if (g_ipra0 && m.frame >= 150) { m.onchip[0xFEE2] = m.onchip[0xFEE3] = 0; }
             if (g_pc_file && m.frame == g_pc_first) g_pc_next = s->cycles;

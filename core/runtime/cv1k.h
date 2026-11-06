@@ -6,7 +6,11 @@
 #include "../sh3/sh3.h"
 #include "timing.h"
 
-#define CV1K_FRAME_HZ 60.0183806291
+/* MAME 0.289 cv1k: set_refresh(60.024 Hz), 512 total lines, visarea 0-239, vblank_time 0: VBLANK (IRQ2)
+   starts at line 240 of each frame. The real board is 60.0183806 Hz (6.4 MHz / (407*262)). */
+#define CV1K_FRAME_HZ 60.024
+#define CV1K_HW_FRAME_HZ 60.0183806291
+#define CV1K_VBL_FRAC (240.0 / 512.0)
 #define CV1K_CPU_HZ   102400000.0
 
 typedef struct {
@@ -70,6 +74,7 @@ void cv1k_reset(CV1K *m);
 void cv1k_set_timing(CV1K *m, int on);   /* MAME 0.289 cache/bus model on/off */
 /* Take a pending interrupt if allowed. Returns 1 if taken. Call only at dispatch boundaries. */
 int  cv1k_check_irq(CV1K *m);
+uint64_t cv1k_vsync_at(uint64_t k);           /* cycle of the k-th (0-based) VBLANK, MAME schedule */
 void cv1k_set_idle(CV1K *m, uint32_t idle_pc, uint32_t idle_ram);
 /* Signal vsync (IRQ2 assert) and advance the frame counter. */
 void cv1k_vsync(CV1K *m);

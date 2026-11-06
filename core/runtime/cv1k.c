@@ -1,3 +1,4 @@
+#include <math.h>
 /* CV1000 machine implementation. See cv1k.h for credits. GPL-2.0-or-later. */
 #include "cv1k.h"
 #include "../sound/ymz770.h"
@@ -478,6 +479,7 @@ static uint8_t bus_rb(void *c, uint32_t a)
 /* MAME cv1k speedup_r: pc() is the DRC's stale PC (fpc); spin_until_time(10 us), IRQs wait for the spin */
 #define IDLE_CHECK(m, a) do { if ((m)->idle_pc && (P(a) & ~7u) == ((m)->idle_ram & 0x1FFFFFF8u) && ((m)->cpu.fpc == (m)->idle_pc || (m)->cpu.fpc == (m)->idle_pc + 2)) \
     { (m)->spin_to = (m)->cpu.cycles + (uint64_t)(CV1K_CPU_HZ / 100000); (m)->cpu.event_at = 0; } } while (0)
+uint64_t cv1k_vsync_at(uint64_t k) { return (uint64_t)ceil((CV1K_VBL_FRAC + (double)k) * CV1K_CPU_HZ / CV1K_FRAME_HZ); }
 void cv1k_set_idle(CV1K *m, uint32_t idle_pc, uint32_t idle_ram) { m->idle_pc = idle_pc; m->idle_ram = idle_ram; m->cpu.pcflush = idle_pc ? idle_pc + 2 : 0; }
 
 static uint16_t bus_rw(void *c, uint32_t a)
@@ -657,5 +659,5 @@ void cv1k_reset(CV1K *m)
 {
     sh3_reset(&m->cpu);
     m->nand.status = 0xC0;
-    m->next_vsync = m->cycles_per_frame;
+    m->next_vsync = cv1k_vsync_at(0);
 }

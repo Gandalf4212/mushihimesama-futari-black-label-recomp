@@ -137,7 +137,7 @@ int main(int argc, char **argv)
     static int16_t abuf[4096 * 2];
     SH3 *s = &g_m.cpu;
     uint32_t entry = GAME_MAIN_ENTRY;
-    g_m.next_vsync = g_m.cycles_per_frame;
+    g_m.next_vsync = cv1k_vsync_at(0);
     int running = 1, booted = 0;
     while (running) {
         /* ---- input: read right before the frame runs ---- */
@@ -167,7 +167,7 @@ int main(int argc, char **argv)
             if (s->trap) cv1k_take_trap(&g_m);
             cv1k_timers(&g_m);
         }
-        cv1k_vsync(&g_m); g_m.next_vsync += g_m.cycles_per_frame;
+        cv1k_vsync(&g_m); g_m.next_vsync = cv1k_vsync_at(g_m.frame);
         if (g_m.ymz) {
             cv1k_sound_catchup(&g_m);
             int n = cv1k_sound_read(&g_m, abuf, 4096);

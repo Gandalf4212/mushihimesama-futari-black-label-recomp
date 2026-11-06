@@ -15,11 +15,11 @@
   NAND; MAME's test menu shows a Free Play option), locate the free-play byte by toggling it in
   MAME's service menu and diffing NAND/RAM, then have the frontend set it (config `freeplay`) and drop
   the coin injection. Keep `--coins` behaviour for coin-op mode.
-* **Sync (2026-11-06):** found MAME's stale-fetch-PC quirk (docs/timing-sync-notes.md 6b). Stage1 offset
-  vs MAME +13..+17 -> -2..-4 frames; boot +11 -> 0/-1. flaglog refs are perturbed by Lua polling: use
-  watchlog refs. Idle speedup (10 us spin) also modelled: boot now a constant +1 frame (no drift),
-  stage1 0 at frame 3000 (+0..+2 during play). Next: the constant +1 at boot, then IRQ acceptance
-  points; wire cv1k_set_idle into the frontend (not yet). Run headless with --idle-pc 0C05176A.
+* **Sync (2026-11-06):** three MAME-parity fixes (docs/timing-sync-notes.md 6b, 6c): stale DRC fetch PC,
+  cv1k idle speedup (10 us spin, `run_headless --idle-pc 0C05176A`), VBLANK schedule (60.024 Hz, line
+  240 of 512). Boot now exactly in sync with MAME; stage1 in sync to frame 520, then 0..+2 flips ahead
+  (slightly too fast). Our frame N = MAME watchlog frame N-2. Next: IRQ acceptance at MAME update
+  points. Frontend not rebuilt; it lacks cv1k_set_idle (add GAME_IDLE_PC to game_config.h).
 * Gamepads P1/P2 confirmed working on test5 (user, 2026-11-06).
 * **Sound next:** compare with MAME `-wavwrite` (same stage1.txt inputs, nvram deleted) against
   `run_headless ... --sound u23 u24 --wav`; pace emulation at 60.018 Hz independent of the display
