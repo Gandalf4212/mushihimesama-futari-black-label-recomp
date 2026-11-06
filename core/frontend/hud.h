@@ -19,5 +19,7 @@ void hud_init(Hud *h);
  * present_ticks: performance counter right after the frame was presented. */
 void hud_frame(Hud *h, uint64_t emu_ticks, uint64_t present_ticks);
 void hud_draw(Hud *h, SDL_Renderer *r, int out_w, int out_h);
+/* 5x7 text at pixel size px (upper case; space and unknown characters are blank). */
+void hud_text(SDL_Renderer *r, int x, int y, int px, const char *s);
 
 #endif

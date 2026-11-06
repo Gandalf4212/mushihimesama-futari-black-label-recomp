@@ -16,6 +16,13 @@
   Cause: core/frontend/input.c opened the same controller twice (explicit open at startup + SDL's
   CONTROLLERDEVICEADDED for already-connected pads), so one pad drove both players' inputs incl.
   Start, and free play coined + started both. Now an already-open pad is ignored.
+* **F1 settings menu (2026-11-06, test8):** core/frontend/menu.c, drawn with the HUD font (now full A-Z).
+  F1 or gamepad Guide / Back+Start opens it; game paused while open; changes apply at once and are
+  saved to config.toml on close. Items: orientation, window scale, fullscreen, vsync, game speed
+  (mame 60.024 / pcb 60.018 / display = one frame per refresh on a ~60 Hz display, like MAME
+  -syncrefresh; new config value frame_rate = "display", --sync-display), slowdown, free play, volume,
+  rotate controls, HUD, resume, quit. Not yet: reset game (needs a cv1k teardown), key/pad remapping,
+  video scaling filters/shaders (SDL3 step). Debug: --shot N file --shot-menu.
 * **Free play redesign (user request):** today free play is a frontend trick (a Start press inserts a
   coin for 4 frames, then presses Start; input.c). Wanted: use the game's own FREE PLAY setting
   instead. Plan: find the settings block in NAND/EEPROM (the game keeps settings + high scores in

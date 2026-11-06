@@ -4,7 +4,7 @@
  *   <exe> [--yoko | --tate-cw | --tate-ccw] [--scale N] [--fullscreen] [--no-slowdown] [--rotate-controls]
  *         [--volume 0-100] [--no-vsync] [--pcb-rate] [--no-sound] [--coins] [--hud]
  * Keys: arrows move, Z X C V = buttons 1-4, 5 coin, 1 start, 2 P2 start, 6 coin 2, F2 test, 9 service,
- *       F11 fullscreen, Esc quit. Gamepad: d-pad/left stick, A B X Y = buttons 1-4, Back coin, Start start.
+ *       F1 settings menu, F10 performance HUD, F11 fullscreen, Esc quit. Gamepad Guide = menu. Gamepad: d-pad/left stick, A B X Y = buttons 1-4, Back coin, Start start.
  * GPL-2.0-or-later. */
 #include <SDL.h>
 #include <stdio.h>
@@ -23,6 +23,7 @@
 #include "game_config.h"
 #include "config.h"
 #include "hud.h"
+#include "menu.h"
 #include "input.h"   /* generated per game: GAME_SET, GAME_TITLE, GAME_RAM_SIZE, GAME_MAIN_ENTRY, GAME_U4, GAME_U2 */
 
 static BlitRef g_blit;
@@ -69,14 +70,25 @@ static int setup(const char *romdir)
 #define ROT_TATE_CW ORIENT_TATE_CW
 #define ROT_TATE_CCW ORIENT_TATE_CCW
 
+/* window size for an orientation and integer scale (0 = largest that fits 90 % of the desktop) */
+static void window_size(Orientation orient, int scale, int *ww, int *wh)
+{
+    SDL_DisplayMode dm; SDL_GetDesktopDisplayMode(0, &dm);
+    int vw = orient == ORIENT_YOKO ? 240 : 320, vh = orient == ORIENT_YOKO ? 320 : 240;
+    if (!scale) { scale = 1; while ((scale + 1) * vw <= dm.w * 9 / 10 && (scale + 1) * vh <= dm.h * 9 / 10) scale++; }
+    *ww = orient == ORIENT_YOKO ? vh * scale * 16 / 9 : vw * scale; *wh = vh * scale;
+    if (*ww < vw * scale) *ww = vw * scale;
+}
+
 int main(int argc, char **argv)
 {
-    long shot_frame = -1; const char *shot_path = NULL; const char *cfg_path = "config.toml"; int no_sound = 0;
+    long shot_frame = -1; const char *shot_path = NULL; const char *cfg_path = "config.toml"; int no_sound = 0, shot_menu = 0;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--setup") && i + 1 < argc) return setup(argv[i + 1]);
         if (!strcmp(argv[i], "--config") && i + 1 < argc) cfg_path = argv[i + 1];
         if (!strcmp(argv[i], "--no-sound")) no_sound = 1;
         if (!strcmp(argv[i], "--shot") && i + 2 < argc) { shot_frame = atol(argv[i + 1]); shot_path = argv[i + 2]; }   /* debug */
+        if (!strcmp(argv[i], "--shot-menu")) shot_menu = 1;   /* debug: open the menu before the shot */
     }
     Config cfg; config_defaults(&cfg);
     if (!config_load(&cfg, cfg_path)) config_save(&cfg, cfg_path);   /* first run: write the defaults */
@@ -112,12 +124,8 @@ int main(int argc, char **argv)
     dispatch_init(g_m.ram_size);
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_AUDIO) != 0) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); return 1; }
-    SDL_DisplayMode dm; SDL_GetDesktopDisplayMode(0, &dm);
-    /* native buffer is 320x240 landscape; ROT270 game -> upright view is the buffer rotated 270 deg clockwise */
     int vw = orient == ROT_YOKO ? 240 : 320, vh = orient == ROT_YOKO ? 320 : 240;
-    if (!scale) { scale = 1; while ((scale + 1) * vw <= dm.w * 9 / 10 && (scale + 1) * vh <= dm.h * 9 / 10) scale++; }
-    int ww = orient == ROT_YOKO ? vh * scale * 16 / 9 : vw * scale, wh = vh * scale;
-    if (ww < vw * scale) ww = vw * scale;
+    int ww, wh; window_size(orient, scale, &ww, &wh);
     SDL_Window *win = SDL_CreateWindow(GAME_TITLE, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, ww, wh,
                                        SDL_WINDOW_RESIZABLE | (fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0));
     SDL_Renderer *ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | (cfg.vsync ? SDL_RENDERER_PRESENTVSYNC : 0));
@@ -147,32 +155,48 @@ int main(int argc, char **argv)
        60.0184 Hz), independent of the display. Presentation uses the display's vsync (no tearing): on a
        60 Hz display about one frame per refresh (one is doubled or dropped every ~40 s), on faster
        displays a frame is shown on 2-3 refreshes. Input is read right before each frame runs. */
-    const double period = 1.0 / (cfg.pcb_rate ? CV1K_HW_FRAME_HZ : CV1K_FRAME_HZ);
     const double freq = (double)SDL_GetPerformanceFrequency();
     double due = (double)SDL_GetPerformanceCounter() / freq;
+    Menu menu; menu_init(&menu);
     while (running) {
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT) running = 0;
-            if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) running = 0;
-            if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_F11) {
-                fullscreen = !fullscreen; SDL_SetWindowFullscreen(win, fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
-            }
-            if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_F10) show_hud = !show_hud;
             if (e.type == SDL_CONTROLLERDEVICEADDED) input_pad_added(&in, e.cdevice.which);
             if (e.type == SDL_CONTROLLERDEVICEREMOVED) input_pad_removed(&in, e.cdevice.which);
+            int was_open = menu.open, ch = menu_event(&menu, &cfg, &show_hud, &e);
+            if (!was_open && menu.open && adev) SDL_ClearQueuedAudio(adev);          /* menu opened: game paused */
+            if (ch & MENU_CH_ORIENT) orient = cfg.orientation;
+            if (ch & MENU_CH_FULLSCREEN) { fullscreen = cfg.fullscreen; SDL_SetWindowFullscreen(win, fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0); }
+            if ((ch & (MENU_CH_SCALE | MENU_CH_ORIENT)) && !fullscreen) { int w2, h2; window_size(orient, cfg.scale, &w2, &h2); SDL_SetWindowSize(win, w2, h2); SDL_SetWindowPosition(win, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED); }
+            if (ch & MENU_CH_VSYNC) SDL_RenderSetVSync(ren, cfg.vsync);
+            if (ch & MENU_CH_SLOWDOWN) cv1k_set_timing(&g_m, cfg.slowdown);
+            if (ch & MENU_CH_QUIT) running = 0;
+            if (ch & MENU_CH_CLOSED) { if (menu.dirty) config_save(&cfg, cfg_path); due = (double)SDL_GetPerformanceCounter() / freq; }
+            if (was_open || menu.open || ch) continue;                               /* the menu owns the input */
+            if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_ESCAPE) running = 0;
+            if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_F11) {
+                fullscreen = !fullscreen; cfg.fullscreen = fullscreen; SDL_SetWindowFullscreen(win, fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+            }
+            if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_F10) show_hud = !show_hud;
+        }
+        const double period = 1.0 / (cfg.rate == RATE_PCB ? CV1K_HW_FRAME_HZ : CV1K_FRAME_HZ);
+        int sync_display = 0;
+        if (cfg.rate == RATE_DISPLAY && cfg.vsync) {                                 /* MAME -syncrefresh style */
+            SDL_DisplayMode wm; if (SDL_GetWindowDisplayMode(win, &wm) == 0 && wm.refresh_rate >= 59 && wm.refresh_rate <= 61) sync_display = 1;
         }
         /* ---- wait until the next game frame is due (sleep, then spin the last ~1.5 ms) ---- */
-        for (;;) {
+        for (;!sync_display;) {
             double now = (double)SDL_GetPerformanceCounter() / freq, left = due - now;
             if (left <= 0) break;
             if (left > 0.002) SDL_Delay((Uint32)((left - 0.0015) * 1000));
         }
         double now = (double)SDL_GetPerformanceCounter() / freq;
-        if (now - due > 4 * period) due = now;            /* after a stall (window drag, breakpoint): don't race */
+        if (now - due > 4 * period || sync_display) due = now;   /* after a stall (window drag): don't race */
+        if (menu.open) due = now + period;                 /* paused: keep presenting at ~60 Hz, run nothing */
         /* ---- run every frame that is due (at most 3 per present) ---- */
         uint64_t t_emu = SDL_GetPerformanceCounter();
-        for (int ran = 0; ran < 3 && due <= now; ran++, due += period) {
+        for (int ran = 0; !menu.open && ran < (sync_display ? 1 : 3) && due <= now; ran++, due += period) {
             if (ran) SDL_PumpEvents();
             input_frame(&in, cfg.freeplay, cfg.rotate_controls && orient == ROT_TATE_CW, cfg.rotate_controls && orient == ROT_TATE_CCW,
                         &g_m.in.c, &g_m.in.d, &g_m.in.l, &g_m.in.f);
@@ -199,6 +223,7 @@ int main(int argc, char **argv)
         blit_ref_frame(&g_blit, g_m.blit.scroll_x, g_m.blit.scroll_y, fb);
         SDL_UpdateTexture(tex, NULL, fb, 320 * 4);
         t_emu = SDL_GetPerformanceCounter() - t_emu;       /* emulation + software blitter */
+        vw = orient == ROT_YOKO ? 240 : 320; vh = orient == ROT_YOKO ? 320 : 240;
         int ow, oh; SDL_GetRendererOutputSize(ren, &ow, &oh);
         int sc = 1; while ((sc + 1) * vw <= ow && (sc + 1) * vh <= oh) sc++;   /* integer scale */
         int dw = vw * sc, dh = vh * sc;
@@ -211,7 +236,9 @@ int main(int argc, char **argv)
         SDL_RenderClear(ren);
         SDL_RenderCopyEx(ren, tex, NULL, &dst, angle, NULL, SDL_FLIP_NONE);
         if (show_hud) hud_draw(&hud, ren, ow, oh);
-        if ((long)g_m.frame >= shot_frame && shot_frame >= 0) {
+        if (menu.open) menu_draw(&menu, &cfg, show_hud, ren, ow, oh);
+        if ((long)g_m.frame >= shot_frame && shot_frame >= 0 && shot_menu && !menu.open) { menu.open = 1; menu.sel = 4; }
+        else if ((long)g_m.frame >= shot_frame && shot_frame >= 0) {
             SDL_Surface *sf = SDL_CreateRGBSurfaceWithFormat(0, ow, oh, 32, SDL_PIXELFORMAT_ARGB8888);
             SDL_RenderReadPixels(ren, NULL, SDL_PIXELFORMAT_ARGB8888, sf->pixels, sf->pitch);
             SDL_SaveBMP(sf, shot_path); SDL_FreeSurface(sf); running = 0;

@@ -16,7 +16,7 @@ snd = [reg['files'] for reg in r['regions'] if reg['region'] == 'ymz770']
 if snd and len(snd[0]) >= 2: print(f'#define GAME_SND0 "{snd[0][0]["name"]}"\n#define GAME_SND1 "{snd[0][1]["name"]}"')
 PY
 CXXSRC="core/sound/ymz770.cpp core/sound/mpeg_audio.cpp"
-SRC="core/frontend/main_sdl.c core/frontend/config.c core/frontend/input.c core/frontend/hud.c core/runtime/cv1k.c core/runtime/timing.c core/runtime/dispatch.c core/render/blit_ref.c core/sh3/sh3_core.c"
+SRC="core/frontend/main_sdl.c core/frontend/config.c core/frontend/input.c core/frontend/hud.c core/frontend/menu.c core/runtime/cv1k.c core/runtime/timing.c core/runtime/dispatch.c core/render/blit_ref.c core/sh3/sh3_core.c"
 if [ "$TARGET" = windows ]; then
   CC=x86_64-w64-mingw32-gcc
   mkdir -p "$OUT/obj"

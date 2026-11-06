@@ -13,10 +13,12 @@ typedef struct {
     int freeplay;              /* [game]  freeplay = true (Start inserts a coin when needed) */
     int rotate_controls;       /* [input] rotate_controls = false */
     int vsync;                 /* [video] vsync = true (present on the display's vsync; pacing is separate) */
-    int pcb_rate;              /* [game]  frame_rate = "mame" (60.024 Hz) | "pcb" (60.0184 Hz, the real board) */
+    int rate;                  /* [game]  frame_rate = "mame" (60.024 Hz) | "pcb" (60.0184 Hz, the real board) |
+                                  "display" (one game frame per refresh on a ~60 Hz display, like MAME -syncrefresh) */
     int volume;                /* [audio] volume = 100 (0-100) */
 } Config;
 void config_defaults(Config *c);
+enum { RATE_MAME, RATE_PCB, RATE_DISPLAY };
 int  config_load(Config *c, const char *path);              /* 0 if missing; errors printed */
 int  config_args(Config *c, int argc, char **argv);         /* returns index of an unknown arg or 0 */
 int  config_save(const Config *c, const char *path);
