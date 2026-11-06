@@ -16,9 +16,21 @@
   Cause: core/frontend/input.c opened the same controller twice (explicit open at startup + SDL's
   CONTROLLERDEVICEADDED for already-connected pads), so one pad drove both players' inputs incl.
   Start, and free play coined + started both. Now an already-open pad is ignored.
-* **test10 (2026-11-06): test9 showed a black game area (HUD/menu fine, no sound heard).** Cause found: blit_ref
+* **test11 (2026-11-06): GPU presentation.** core/frontend/present.c: SDL3 GPU renderer forced to Vulkan
+  (SDL_HINT_GPU_DRIVER), our GLSL shaders (core/frontend/shaders/game.frag, bezel.frag) -> SPIR-V by
+  glslangValidator (apt glslang-tools) -> build/<set>/shaders_spv.h, run via SDL_GPURenderState (custom
+  uniforms replace SDL's slot-0 constants; v_color loc 0, v_uv loc 1, sampler set 2, uniforms set 3).
+  Fallback without Vulkan: plain renderer, no shaders (HUD shows BASIC vs VULKAN). Config [video]: scaling
+  = fit | integer, shader = none | sharp | crt | crt-curved, bezel (procedural Yoko bezel with ambient
+  glow), bezel_image (optional PNG/BMP overlay), uncapped (benchmark: no vsync, presents flat out; game
+  frames still paced at 60.024 Hz). All in the F1 menu. HUD: GAME fps, PRESENT fps, EMU ms per game frame,
+  CAP = 1000/EMU (game fps the CPU could sustain), PRES ms (draw+present; SDL_GPU has no timestamp
+  queries, so no true GPU %). Window sized in pixels (SDL_WINDOW_HIGH_PIXEL_DENSITY + fit_window_pixels)
+  for scaled 1440p/4K desktops. Untested here (no Vulkan in the container). **To confirm:** shaders and
+  bezel look right, HUD says VULKAN, uncapped numbers, window size with display scaling.
+* **test10 (2026-11-06, confirmed working by user incl. sound): test9 showed a black game area (HUD/menu fine, no sound heard).** Cause found: blit_ref
   writes 0 in the top byte and the texture was ARGB8888, which SDL3 blends -> invisible. Fix: XRGB8888 +
-  SDL_BLENDMODE_NONE. Sound unconfirmed: if test10 still has no sound, check the SDL_AudioStream path.
+  SDL_BLENDMODE_NONE. Free play: still the coin trick (Start and Back both give a coin sound); native free play deferred by user.
 * **test9 (2026-11-06): F:\claude2\fbl\futaribl_windows_test9.zip = SDL2 -> SDL3 port (SDL 3.4.20) + native rate.**
   Same SDL_Renderer presentation as test8 (no GPU shaders yet); audio now an SDL_AudioStream
   (SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES 256), pads via SDL_EVENT_GAMEPAD_ADDED (also fires for pads present
@@ -58,7 +70,7 @@
   (now one emulated frame per vsync: >60 Hz displays run fast and drop audio); volume option.
 * Then: F1 menu (reuse HUD font), SDL3 GPU presentation + CRT shaders + bezels, milestone 4 tests.
 * Workspace setup: clone repo; stage F:\claude2\fbl\futaribl\* (4 files); pip install capstone
-  --break-system-packages; apt-get install -y mingw-w64 zip lua5.4; SDL3-devel-3.4.20-mingw.tar.gz
+  --break-system-packages; apt-get install -y mingw-w64 zip lua5.4 glslang-tools; SDL3-devel-3.4.20-mingw.tar.gz
   from github.com/libsdl-org/SDL releases unpacked in /home/claude/deps; tools/build_game.sh futaribl
   <romdir> (~6.5 min, once; the "misses" number is cumulative), tools/build_frontend.sh futaribl
   windows (~7 min). Build note: core/sound is C++20 (final link with g++). Use mcp device tools for

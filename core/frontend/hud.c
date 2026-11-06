@@ -1,7 +1,8 @@
 /* Performance overlay: FPS, emulation time / CPU %, frame time, frame-time graph.
  * Drawn in window space with filled rectangles (always upright, independent of the game rotation).
  * The 5x7 font below is our own (original glyphs: digits, A-Z and a few symbols; also used by the F1 menu).
- * GPU % is not shown yet: the SDL renderer exposes no GPU timing (comes with the SDL3 GPU presenter).
+ * SDL_GPU has no GPU timestamp queries, so instead of a GPU % the HUD shows the time spent drawing and
+ * presenting (PRES; with vsync on it includes the wait for the display). Uncapped mode shows raw present FPS.
  * GPL-2.0-or-later. */
 #include "hud.h"
 #include "../runtime/cv1k.h"   /* CV1K_FRAME_HZ */
@@ -69,9 +70,10 @@ void hud_init(Hud *h)
     h->window_start = h->last_present;
 }
 
-void hud_frame(Hud *h, uint64_t emu_ticks, uint64_t present_ticks)
+void hud_frame(Hud *h, int games, uint64_t emu_ticks, uint64_t pres_ticks, uint64_t present_ticks)
 {
     double emu_ms = (double)emu_ticks * 1000.0 / h->freq;
+    h->acc_pres += (double)pres_ticks * 1000.0 / h->freq; h->acc_games += games;
     double frame_ms = (double)(present_ticks - h->last_present) * 1000.0 / h->freq;
     h->last_present = present_ticks;
     h->graph[h->gpos] = (float)frame_ms; h->emu_graph[h->gpos] = (float)emu_ms;
@@ -80,10 +82,12 @@ void hud_frame(Hud *h, uint64_t emu_ticks, uint64_t present_ticks)
     double win = (double)(present_ticks - h->window_start) / h->freq;
     if (win >= 0.5) {   /* refresh the numbers twice a second */
         h->fps = h->acc_n / win;
-        h->emu_ms = h->acc_emu / h->acc_n;
+        h->game_fps = h->acc_games / win;
+        h->emu_ms = h->acc_games ? h->acc_emu / h->acc_games : 0;   /* per game frame */
+        h->pres_ms = h->acc_pres / h->acc_n;
         h->frame_ms = h->acc_frame / h->acc_n;
         h->max_ms = h->acc_max;
-        h->acc_emu = h->acc_frame = h->acc_max = 0; h->acc_n = 0;
+        h->acc_emu = h->acc_frame = h->acc_max = h->acc_pres = 0; h->acc_n = h->acc_games = 0;
         h->window_start = present_ticks;
     }
 }
@@ -91,7 +95,7 @@ void hud_frame(Hud *h, uint64_t emu_ticks, uint64_t present_ticks)
 void hud_draw(Hud *h, SDL_Renderer *r, int out_w, int out_h)
 {
     int px = out_h >= 1400 ? 3 : 2;                      /* font pixel size */
-    int lh = 9 * px, x0 = 8, y0 = 8, w = 6 * px * 22 + 2 * px, gh = 24 * px;
+    int lh = 9 * px, x0 = 8, y0 = 8, w = 6 * px * 32 + 2 * px, gh = 24 * px;
     (void)out_w;
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(r, 0, 0, 0, 170);
@@ -99,11 +103,13 @@ void hud_draw(Hud *h, SDL_Renderer *r, int out_w, int out_h)
     SDL_RenderFillRect(r, &bg);
     char line[64];
     SDL_SetRenderDrawColor(r, 255, 255, 255, 255);
-    snprintf(line, sizeof line, "FPS %6.2f", h->fps);                               text(r, x0, y0, px, line);
-    snprintf(line, sizeof line, "CPU %5.1f%%  EMU %5.2f MS", h->emu_ms / (1000.0 / CV1K_FRAME_HZ) * 100.0, h->emu_ms);
+    snprintf(line, sizeof line, "GAME %5.2f  PRESENT %5.0f FPS", h->game_fps, h->fps);  text(r, x0, y0, px, line);
+    snprintf(line, sizeof line, "CPU %5.1f%%  EMU %5.2f MS  CAP %4.0f", h->emu_ms / (1000.0 / CV1K_FRAME_HZ) * 100.0, h->emu_ms,
+             h->emu_ms > 0 ? 1000.0 / h->emu_ms : 0.0);
     text(r, x0, y0 + lh, px, line);
     snprintf(line, sizeof line, "FRAME %5.2f MS  MAX %5.2f", h->frame_ms, h->max_ms); text(r, x0, y0 + 2 * lh, px, line);
-    text(r, x0, y0 + 3 * lh, px, "GPU --");
+    snprintf(line, sizeof line, "PRES %5.2f MS  %s %s", h->pres_ms, h->backend ? h->backend : "", h->note ? h->note : "");
+    text(r, x0, y0 + 3 * lh, px, line);
     /* graph: frame time (white) and emulation time (green) for the last HUD_GRAPH frames, 0-33 ms;
        the line marks one 60 Hz frame (16.7 ms) */
     int gy = y0 + 4 * lh + 4, bw = w / HUD_GRAPH > 0 ? w / HUD_GRAPH : 1;

@@ -16,9 +16,16 @@ typedef struct {
     int rate;                  /* [game]  frame_rate = "native" (60.024 Hz, measured on a PCB; MAME's rate) |
                                   "display" (one game frame per refresh on a ~60 Hz display, like MAME -syncrefresh) */
     int volume;                /* [audio] volume = 100 (0-100) */
+    int scaling;               /* [video] scaling = "fit" (largest, keeps aspect) | "integer" */
+    int shader;                /* [video] shader = "none" | "sharp" | "crt" | "crt-curved" */
+    int bezel;                 /* [video] bezel = true (Yoko: our bezel; plus bezel_image if set) */
+    char bezel_image[260];     /* [video] bezel_image = "" (optional PNG/BMP overlay with a transparent screen) */
+    int uncapped;              /* [video] uncapped = false (benchmark: present as fast as possible; game stays 60.024 Hz) */
 } Config;
 void config_defaults(Config *c);
 enum { RATE_NATIVE, RATE_DISPLAY };
+enum { SCALING_FIT, SCALING_INTEGER };
+enum { SHADER_NONE, SHADER_SHARP, SHADER_CRT, SHADER_CURVED };
 int  config_load(Config *c, const char *path);              /* 0 if missing; errors printed */
 int  config_args(Config *c, int argc, char **argv);         /* returns index of an unknown arg or 0 */
 int  config_save(const Config *c, const char *path);

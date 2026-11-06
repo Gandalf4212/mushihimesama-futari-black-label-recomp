@@ -15,8 +15,17 @@ if 'idle' in g: print(f'#define GAME_IDLE_PC {g["idle"]["pc"]}u\n#define GAME_ID
 snd = [reg['files'] for reg in r['regions'] if reg['region'] == 'ymz770']
 if snd and len(snd[0]) >= 2: print(f'#define GAME_SND0 "{snd[0][0]["name"]}"\n#define GAME_SND1 "{snd[0][1]["name"]}"')
 PY
+# our shaders: GLSL -> SPIR-V (glslang-tools) -> C arrays in $B/shaders_spv.h (generated, not committed)
+for f in core/frontend/shaders/*.frag; do glslangValidator -V -o "$B/$(basename $f .frag)_frag.spv" "$f" >/dev/null || { glslangValidator -V -o /dev/null "$f"; exit 1; }; done
+python3 - "$B" > "$B/shaders_spv.h" <<'PY'
+import glob, os, sys
+for p in sorted(glob.glob(sys.argv[1] + '/*_frag.spv')):
+    n = os.path.basename(p)[:-4]; d = open(p, 'rb').read()
+    print(f'static const unsigned char {n}_spv[] = {{' + ','.join(str(b) for b in d) + '};')
+    print(f'static const size_t {n}_spv_len = {len(d)};')
+PY
 CXXSRC="core/sound/ymz770.cpp core/sound/mpeg_audio.cpp"
-SRC="core/frontend/main_sdl.c core/frontend/config.c core/frontend/input.c core/frontend/hud.c core/frontend/menu.c core/runtime/cv1k.c core/runtime/timing.c core/runtime/dispatch.c core/render/blit_ref.c core/sh3/sh3_core.c"
+SRC="core/frontend/main_sdl.c core/frontend/present.c core/frontend/config.c core/frontend/input.c core/frontend/hud.c core/frontend/menu.c core/runtime/cv1k.c core/runtime/timing.c core/runtime/dispatch.c core/render/blit_ref.c core/sh3/sh3_core.c"
 if [ "$TARGET" = windows ]; then
   CC=x86_64-w64-mingw32-gcc
   mkdir -p "$OUT/obj"

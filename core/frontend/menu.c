@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 
-enum { I_ORIENT, I_SCALE, I_FULLSCREEN, I_VSYNC, I_RATE, I_SLOWDOWN, I_FREEPLAY, I_VOLUME, I_ROTCTL, I_HUD,
+enum { I_ORIENT, I_SCALE, I_SCALING, I_SHADER, I_BEZEL, I_FULLSCREEN, I_VSYNC, I_UNCAPPED, I_RATE, I_SLOWDOWN, I_FREEPLAY, I_VOLUME, I_ROTCTL, I_HUD,
        I_RESUME, I_QUIT, I_COUNT };
 
 void menu_init(Menu *m) { memset(m, 0, sizeof *m); }
@@ -19,6 +19,10 @@ static void value(const Config *c, int show_hud, int i, char *out, size_t n)
     switch (i) {
     case I_ORIENT: snprintf(out, n, "%s", orient[c->orientation]); break;
     case I_SCALE: if (c->scale) snprintf(out, n, "%dX", c->scale); else snprintf(out, n, "AUTO"); break;
+    case I_SCALING: snprintf(out, n, "%s", c->scaling == SCALING_INTEGER ? "INTEGER" : "FIT (KEEP ASPECT)"); break;
+    case I_SHADER: { static const char *sh[] = {"NONE", "SHARP", "CRT", "CRT CURVED"}; snprintf(out, n, "%s", sh[c->shader]); break; }
+    case I_BEZEL: snprintf(out, n, "%s", c->bezel ? "ON (YOKO)" : "OFF"); break;
+    case I_UNCAPPED: snprintf(out, n, "%s", c->uncapped ? "ON (BENCHMARK)" : "OFF"); break;
     case I_FULLSCREEN: snprintf(out, n, "%s", c->fullscreen ? "ON" : "OFF"); break;
     case I_VSYNC: snprintf(out, n, "%s", c->vsync ? "ON" : "OFF"); break;
     case I_RATE: snprintf(out, n, "%s", rate[c->rate]); break;
@@ -32,7 +36,7 @@ static void value(const Config *c, int show_hud, int i, char *out, size_t n)
 }
 
 static const char *label[I_COUNT] = {
-    "ORIENTATION", "WINDOW SCALE", "FULLSCREEN", "VSYNC", "GAME SPEED", "SLOWDOWN", "FREE PLAY", "VOLUME",
+    "ORIENTATION", "WINDOW SCALE", "SCALING", "SHADER", "BEZEL", "FULLSCREEN", "VSYNC", "UNCAPPED FPS", "GAME SPEED", "SLOWDOWN", "FREE PLAY", "VOLUME",
     "ROTATE CONTROLS", "PERFORMANCE HUD", "RESUME", "QUIT"
 };
 
@@ -43,6 +47,10 @@ static int change(Menu *m, Config *c, int *show_hud, int dir)
     switch (m->sel) {
     case I_ORIENT: c->orientation = (Orientation)((c->orientation + 3 + d) % 3); ch = MENU_CH_ORIENT; break;
     case I_SCALE: c->scale = (c->scale + 9 + d) % 9; ch = MENU_CH_SCALE; break;       /* 0 = auto, 1..8 */
+    case I_SCALING: c->scaling = !c->scaling; break;
+    case I_SHADER: c->shader = (c->shader + 4 + d) % 4; break;
+    case I_BEZEL: c->bezel = !c->bezel; break;
+    case I_UNCAPPED: c->uncapped = !c->uncapped; ch = MENU_CH_VSYNC; break;
     case I_FULLSCREEN: c->fullscreen = !c->fullscreen; ch = MENU_CH_FULLSCREEN; break;
     case I_VSYNC: c->vsync = !c->vsync; ch = MENU_CH_VSYNC; break;
     case I_RATE: c->rate = (c->rate + 2 + d) % 2; ch = MENU_CH_RATE; break;

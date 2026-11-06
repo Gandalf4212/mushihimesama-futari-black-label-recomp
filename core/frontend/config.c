@@ -9,6 +9,7 @@ void config_defaults(Config *c)
 {
     c->orientation = ORIENT_YOKO; c->scale = 0; c->fullscreen = 0; c->hud = 0;
     c->slowdown = 1; c->freeplay = 1; c->rotate_controls = 0; c->vsync = 1; c->rate = RATE_NATIVE; c->volume = 100;
+    c->scaling = SCALING_FIT; c->shader = SHADER_SHARP; c->bezel = 1; c->bezel_image[0] = 0; c->uncapped = 0;
 }
 
 static char *trim(char *s)
@@ -35,6 +36,11 @@ static void set(Config *c, const char *sec, const char *key, const char *v)
     else if (!strcmp(full, "video.vsync")) c->vsync = as_bool(v);
     else if (!strcmp(full, "game.frame_rate")) c->rate = !strcmp(v, "display") ? RATE_DISPLAY : RATE_NATIVE;   /* old "mame"/"pcb" -> native */
     else if (!strcmp(full, "audio.volume")) { c->volume = atoi(v); if (c->volume < 0) c->volume = 0; if (c->volume > 100) c->volume = 100; }
+    else if (!strcmp(full, "video.scaling")) c->scaling = !strcmp(v, "integer") ? SCALING_INTEGER : SCALING_FIT;
+    else if (!strcmp(full, "video.shader")) c->shader = !strcmp(v, "none") ? SHADER_NONE : !strcmp(v, "crt") ? SHADER_CRT : !strcmp(v, "crt-curved") ? SHADER_CURVED : SHADER_SHARP;
+    else if (!strcmp(full, "video.bezel")) c->bezel = as_bool(v);
+    else if (!strcmp(full, "video.bezel_image")) snprintf(c->bezel_image, sizeof c->bezel_image, "%s", v);
+    else if (!strcmp(full, "video.uncapped")) c->uncapped = as_bool(v);
     else fprintf(stderr, "config: unknown key %s\n", full);
 }
 
@@ -77,6 +83,10 @@ int config_args(Config *c, int argc, char **argv)
         else if (!strcmp(a, "--rotate-controls")) c->rotate_controls = 1;
         else if (!strcmp(a, "--no-vsync")) c->vsync = 0;
         else if (!strcmp(a, "--sync-display")) c->rate = RATE_DISPLAY;
+        else if (!strcmp(a, "--uncapped")) c->uncapped = 1;
+        else if (!strcmp(a, "--integer")) c->scaling = SCALING_INTEGER;
+        else if (!strcmp(a, "--no-bezel")) c->bezel = 0;
+        else if (!strcmp(a, "--shader") && i + 1 < argc) { const char *v = argv[++i]; c->shader = !strcmp(v, "none") ? SHADER_NONE : !strcmp(v, "crt") ? SHADER_CRT : !strcmp(v, "crt-curved") ? SHADER_CURVED : SHADER_SHARP; }
         else if (!strcmp(a, "--volume") && i + 1 < argc) { c->volume = atoi(argv[++i]); if (c->volume < 0) c->volume = 0; if (c->volume > 100) c->volume = 100; }
         else if (!strcmp(a, "--config") || !strcmp(a, "--shot")) i += !strcmp(a, "--shot") ? 2 : 1;   /* handled elsewhere */
         else if (!strcmp(a, "--shot-menu")) ;
@@ -94,8 +104,13 @@ int config_save(const Config *c, const char *path)
     FILE *f = fopen(path, "w"); if (!f) return 0;
     static const char *o[] = {"yoko", "tate-cw", "tate-ccw"};
     fprintf(f, "# Settings. Command-line flags override these (see README.txt).\n\n");
-    fprintf(f, "[video]\norientation = \"%s\"   # yoko | tate-cw | tate-ccw\nscale = %d             # 0 = largest that fits\nfullscreen = %s\nhud = %s             # performance overlay (F10 toggles)\nvsync = %s           # tear-free presentation; game speed is paced separately\n\n",
-            o[c->orientation], c->scale, c->fullscreen ? "true" : "false", c->hud ? "true" : "false", c->vsync ? "true" : "false");
+    fprintf(f, "[video]\norientation = \"%s\"   # yoko | tate-cw | tate-ccw\nscale = %d             # 0 = largest that fits\nfullscreen = %s\nhud = %s             # performance overlay (F10 toggles)\nvsync = %s           # tear-free presentation; game speed is paced separately\n"
+               "scaling = \"%s\"      # fit (largest, keeps aspect) | integer\nshader = \"%s\"       # none | sharp | crt | crt-curved\n"
+               "bezel = %s            # Yoko bezel (ours), plus bezel_image if set\nbezel_image = \"%s\"   # optional PNG/BMP overlay, transparent where the screen is\n"
+               "uncapped = %s        # benchmark: present as fast as possible (game still runs at 60.024 Hz)\n\n",
+            o[c->orientation], c->scale, c->fullscreen ? "true" : "false", c->hud ? "true" : "false", c->vsync ? "true" : "false",
+            c->scaling == SCALING_INTEGER ? "integer" : "fit", (const char *[]){"none", "sharp", "crt", "crt-curved"}[c->shader],
+            c->bezel ? "true" : "false", c->bezel_image, c->uncapped ? "true" : "false");
     fprintf(f, "[game]\nslowdown = %s          # original slowdown\nfreeplay = %s          # Start inserts a coin when needed\nframe_rate = \"%s\"      # native (60.024 Hz) | display (1 frame per refresh on ~60 Hz)\n\n[audio]\nvolume = %d            # 0-100\n\n",
             c->slowdown ? "true" : "false", c->freeplay ? "true" : "false", c->rate == RATE_DISPLAY ? "display" : "native", c->volume);
     fprintf(f, "[input]\nrotate_controls = %s   # rotate stick directions with a Tate display\n", c->rotate_controls ? "true" : "false");

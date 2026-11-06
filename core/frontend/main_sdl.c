@@ -25,6 +25,7 @@
 #include "config.h"
 #include "hud.h"
 #include "menu.h"
+#include "present.h"
 #include "input.h"   /* generated per game: GAME_SET, GAME_TITLE, GAME_RAM_SIZE, GAME_MAIN_ENTRY, GAME_U4, GAME_U2 */
 
 static BlitRef g_blit;
@@ -75,11 +76,21 @@ static int setup(const char *romdir)
 static void window_size(Orientation orient, int scale, int *ww, int *wh)
 {
     const SDL_DisplayMode *m = SDL_GetDesktopDisplayMode(SDL_GetPrimaryDisplay());
-    SDL_DisplayMode dm = m ? *m : (SDL_DisplayMode){.w = 1920, .h = 1080};
+    SDL_DisplayMode dm = m ? *m : (SDL_DisplayMode){.w = 1920, .h = 1080, .pixel_density = 1};
+    if (dm.pixel_density > 0) { dm.w = (int)(dm.w * dm.pixel_density); dm.h = (int)(dm.h * dm.pixel_density); }   /* pixels */
     int vw = orient == ORIENT_YOKO ? 240 : 320, vh = orient == ORIENT_YOKO ? 320 : 240;
     if (!scale) { scale = 1; while ((scale + 1) * vw <= dm.w * 9 / 10 && (scale + 1) * vh <= dm.h * 9 / 10) scale++; }
     *ww = orient == ORIENT_YOKO ? vh * scale * 16 / 9 : vw * scale; *wh = vh * scale;
     if (*ww < vw * scale) *ww = vw * scale;
+}
+
+/* Window sizes are asked for in pixels. With display scaling (e.g. 125 % on a 1440p screen) SDL may use
+   scaled window coordinates: correct the size so the window really has ww x wh pixels. */
+static void fit_window_pixels(SDL_Window *win, int ww, int wh)
+{
+    int pw, ph, w, h;
+    if (!SDL_GetWindowSizeInPixels(win, &pw, &ph) || !SDL_GetWindowSize(win, &w, &h) || pw <= 0 || ph <= 0) return;
+    if (pw != ww || ph != wh) SDL_SetWindowSize(win, (int)((double)ww * w / pw + 0.5), (int)((double)wh * h / ph + 0.5));
 }
 
 int main(int argc, char **argv)
@@ -127,21 +138,18 @@ int main(int argc, char **argv)
 
     SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "256");   /* small device buffer: low latency */
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_AUDIO)) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); return 1; }
-    int vw = orient == ROT_YOKO ? 240 : 320, vh = orient == ROT_YOKO ? 320 : 240;
     int ww, wh; window_size(orient, scale, &ww, &wh);
-    SDL_Window *win = SDL_CreateWindow(GAME_TITLE, ww, wh, SDL_WINDOW_RESIZABLE | (fullscreen ? SDL_WINDOW_FULLSCREEN : 0));
-    SDL_Renderer *ren = SDL_CreateRenderer(win, NULL);
-    if (!win || !ren) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); return 1; }
-    SDL_SetRenderVSync(ren, cfg.vsync ? 1 : 0);
-    SDL_Texture *tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_XRGB8888, SDL_TEXTUREACCESS_STREAMING, 320, 240);
-    /* the blitter leaves the top byte 0: use XRGB and no blending (SDL3 blends ARGB textures, so 0 = invisible) */
-    SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_NONE);
-    SDL_SetTextureScaleMode(tex, SDL_SCALEMODE_NEAREST);
+    SDL_Window *win = SDL_CreateWindow(GAME_TITLE, ww, wh, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY | (fullscreen ? SDL_WINDOW_FULLSCREEN : 0));
+    if (!win) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); return 1; }
+    fit_window_pixels(win, ww, wh);
+    Presenter pr;
+    if (!present_init(&pr, win, &cfg)) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); return 1; }
+    SDL_Renderer *ren = pr.ren;
     Input in; input_init(&in);
     /* pads already connected arrive as SDL_EVENT_GAMEPAD_ADDED */
 
     static uint32_t fb[320 * 240];
-    Hud hud; hud_init(&hud); int show_hud = cfg.hud;
+    Hud hud; hud_init(&hud); int show_hud = cfg.hud; hud.backend = present_backend(&pr);
     /* audio: YMZ770 output is 16 kHz stereo; SDL converts to the device format. Each frame's samples
        are queued right after the frame; the queue is kept short (low latency) by dropping a frame's
        audio when more than ~4 frames are already waiting (e.g. on displays faster than 60 Hz). */
@@ -173,8 +181,8 @@ int main(int argc, char **argv)
             if (!was_open && menu.open && adev) SDL_ClearAudioStream(adev);          /* menu opened: game paused */
             if (ch & MENU_CH_ORIENT) orient = cfg.orientation;
             if (ch & MENU_CH_FULLSCREEN) { fullscreen = cfg.fullscreen; SDL_SetWindowFullscreen(win, fullscreen != 0); }
-            if ((ch & (MENU_CH_SCALE | MENU_CH_ORIENT)) && !fullscreen) { int w2, h2; window_size(orient, cfg.scale, &w2, &h2); SDL_SetWindowSize(win, w2, h2); SDL_SetWindowPosition(win, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED); }
-            if (ch & MENU_CH_VSYNC) SDL_SetRenderVSync(ren, cfg.vsync ? 1 : 0);
+            if ((ch & (MENU_CH_SCALE | MENU_CH_ORIENT)) && !fullscreen) { int w2, h2; window_size(orient, cfg.scale, &w2, &h2); SDL_SetWindowSize(win, w2, h2); fit_window_pixels(win, w2, h2); SDL_SetWindowPosition(win, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED); }
+            if (ch & MENU_CH_VSYNC) SDL_SetRenderVSync(ren, cfg.vsync && !cfg.uncapped ? 1 : 0);
             if (ch & MENU_CH_SLOWDOWN) cv1k_set_timing(&g_m, cfg.slowdown);
             if (ch & MENU_CH_QUIT) running = 0;
             if (ch & MENU_CH_CLOSED) { if (menu.dirty) config_save(&cfg, cfg_path); due = (double)SDL_GetPerformanceCounter() / freq; }
@@ -191,7 +199,7 @@ int main(int argc, char **argv)
             const SDL_DisplayMode *wm = SDL_GetCurrentDisplayMode(SDL_GetDisplayForWindow(win)); if (wm && wm->refresh_rate >= 59 && wm->refresh_rate <= 61) sync_display = 1;
         }
         /* ---- wait until the next game frame is due (sleep, then spin the last ~1.5 ms) ---- */
-        for (;!sync_display;) {
+        for (;!sync_display && !cfg.uncapped;) {
             double now = (double)SDL_GetPerformanceCounter() / freq, left = due - now;
             if (left <= 0) break;
             if (left > 0.002) SDL_Delay((Uint32)((left - 0.0015) * 1000));
@@ -201,7 +209,8 @@ int main(int argc, char **argv)
         if (menu.open) due = now + period;                 /* paused: keep presenting at ~60 Hz, run nothing */
         /* ---- run every frame that is due (at most 3 per present) ---- */
         uint64_t t_emu = SDL_GetPerformanceCounter();
-        for (int ran = 0; !menu.open && ran < (sync_display ? 1 : 3) && due <= now; ran++, due += period) {
+        int ran = 0;
+        for (ran = 0; !menu.open && ran < (sync_display ? 1 : 3) && due <= now; ran++, due += period) {
             if (ran) SDL_PumpEvents();
             input_frame(&in, cfg.freeplay, cfg.rotate_controls && orient == ROT_TATE_CW, cfg.rotate_controls && orient == ROT_TATE_CCW,
                         &g_m.in.c, &g_m.in.d, &g_m.in.l, &g_m.in.f);
@@ -225,21 +234,12 @@ int main(int argc, char **argv)
             }
         }
         /* ---- present ---- */
-        blit_ref_frame(&g_blit, g_m.blit.scroll_x, g_m.blit.scroll_y, fb);
-        SDL_UpdateTexture(tex, NULL, fb, 320 * 4);
+        if (ran) blit_ref_frame(&g_blit, g_m.blit.scroll_x, g_m.blit.scroll_y, fb);   /* only when the game advanced */
         t_emu = SDL_GetPerformanceCounter() - t_emu;       /* emulation + software blitter */
-        vw = orient == ROT_YOKO ? 240 : 320; vh = orient == ROT_YOKO ? 320 : 240;
+        uint64_t t_pres = SDL_GetPerformanceCounter();
         int ow, oh; SDL_GetCurrentRenderOutputSize(ren, &ow, &oh);
-        int sc = 1; while ((sc + 1) * vw <= ow && (sc + 1) * vh <= oh) sc++;   /* integer scale */
-        int dw = vw * sc, dh = vh * sc;
-        SDL_FRect dst;
-        double angle = orient == ROT_YOKO ? 270.0 : orient == ROT_TATE_CW ? 180.0 : 0.0;
-        if (orient == ROT_YOKO) {                            /* texture is 320x240 before rotating 90 deg */
-            dst.w = dh; dst.h = dw; dst.x = (float)((ow - dh) / 2); dst.y = (float)((oh - dw) / 2);
-        } else { dst.w = dw; dst.h = dh; dst.x = (float)((ow - dw) / 2); dst.y = (float)((oh - dh) / 2); }
-        SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
-        SDL_RenderClear(ren);
-        SDL_RenderTextureRotated(ren, tex, NULL, &dst, angle, NULL, SDL_FLIP_NONE);
+        present_draw(&pr, &cfg, orient, ran ? fb : NULL, ow, oh);
+        hud.note = cfg.uncapped ? "UNCAPPED" : NULL;
         if (show_hud) hud_draw(&hud, ren, ow, oh);
         if (menu.open) menu_draw(&menu, &cfg, show_hud, ren, ow, oh);
         if ((long)g_m.frame >= shot_frame && shot_frame >= 0 && shot_menu && !menu.open) { menu.open = 1; menu.sel = 4; }
@@ -249,7 +249,8 @@ int main(int argc, char **argv)
             running = 0;
         }
         SDL_RenderPresent(ren);
-        hud_frame(&hud, t_emu, SDL_GetPerformanceCounter());
+        uint64_t t_end = SDL_GetPerformanceCounter();
+        hud_frame(&hud, ran, ran ? t_emu : 0, t_end - t_pres, t_end);
     }
     /* save settings / high scores */
     if (g_m.rtc.dirty) { FILE *f = fopen("assets/eeprom.bin", "wb"); if (f) { fwrite(g_m.rtc.eeprom, 1, sizeof g_m.rtc.eeprom, f); fclose(f); } }
