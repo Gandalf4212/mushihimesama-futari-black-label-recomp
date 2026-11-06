@@ -133,7 +133,9 @@ int main(int argc, char **argv)
     SDL_Renderer *ren = SDL_CreateRenderer(win, NULL);
     if (!win || !ren) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); return 1; }
     SDL_SetRenderVSync(ren, cfg.vsync ? 1 : 0);
-    SDL_Texture *tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, 320, 240);
+    SDL_Texture *tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_XRGB8888, SDL_TEXTUREACCESS_STREAMING, 320, 240);
+    /* the blitter leaves the top byte 0: use XRGB and no blending (SDL3 blends ARGB textures, so 0 = invisible) */
+    SDL_SetTextureBlendMode(tex, SDL_BLENDMODE_NONE);
     SDL_SetTextureScaleMode(tex, SDL_SCALEMODE_NEAREST);
     Input in; input_init(&in);
     /* pads already connected arrive as SDL_EVENT_GAMEPAD_ADDED */

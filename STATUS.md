@@ -16,6 +16,9 @@
   Cause: core/frontend/input.c opened the same controller twice (explicit open at startup + SDL's
   CONTROLLERDEVICEADDED for already-connected pads), so one pad drove both players' inputs incl.
   Start, and free play coined + started both. Now an already-open pad is ignored.
+* **test10 (2026-11-06): test9 showed a black game area (HUD/menu fine, no sound heard).** Cause found: blit_ref
+  writes 0 in the top byte and the texture was ARGB8888, which SDL3 blends -> invisible. Fix: XRGB8888 +
+  SDL_BLENDMODE_NONE. Sound unconfirmed: if test10 still has no sound, check the SDL_AudioStream path.
 * **test9 (2026-11-06): F:\claude2\fbl\futaribl_windows_test9.zip = SDL2 -> SDL3 port (SDL 3.4.20) + native rate.**
   Same SDL_Renderer presentation as test8 (no GPU shaders yet); audio now an SDL_AudioStream
   (SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES 256), pads via SDL_EVENT_GAMEPAD_ADDED (also fires for pads present
