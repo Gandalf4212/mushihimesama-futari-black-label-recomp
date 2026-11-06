@@ -9,39 +9,35 @@ enum { C_SERVICE = 0x01, C_COIN1 = 0x04, C_COIN2 = 0x08, C_START1 = 0x10, C_STAR
 
 void input_init(Input *in) { memset(in, 0, sizeof *in); }
 
-void input_pad_added(Input *in, int device_index)
+void input_pad_added(Input *in, SDL_JoystickID id)
 {
-    /* SDL sends CONTROLLERDEVICEADDED at startup for pads that are already connected, and main_sdl.c
-       also opens them explicitly: ignore a pad that is already open, or one pad would drive P1 and P2. */
-    SDL_JoystickID id = SDL_JoystickGetDeviceInstanceID(device_index);
-    for (int p = 0; p < 2; p++)
-        if (in->pad[p] && SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(in->pad[p])) == id) return;
-    for (int p = 0; p < 2; p++) if (!in->pad[p]) { in->pad[p] = SDL_GameControllerOpen(device_index); return; }
+    /* SDL3 sends SDL_EVENT_GAMEPAD_ADDED for every pad, including those connected at startup; ignore a
+       pad that is already open, or one pad would drive P1 and P2. */
+    for (int p = 0; p < 2; p++) if (in->pad[p] && SDL_GetGamepadID(in->pad[p]) == id) return;
+    for (int p = 0; p < 2; p++) if (!in->pad[p]) { in->pad[p] = SDL_OpenGamepad(id); return; }
 }
 
 void input_pad_removed(Input *in, SDL_JoystickID id)
 {
     for (int p = 0; p < 2; p++)
-        if (in->pad[p] && SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(in->pad[p])) == id) {
-            SDL_GameControllerClose(in->pad[p]); in->pad[p] = NULL;
-        }
+        if (in->pad[p] && SDL_GetGamepadID(in->pad[p]) == id) { SDL_CloseGamepad(in->pad[p]); in->pad[p] = NULL; }
 }
 
-static uint8_t pad_bits(SDL_GameController *g, int *start, int *coin)
+static uint8_t pad_bits(SDL_Gamepad *g, int *start, int *coin)
 {
     if (!g) return 0;
-    int ax = SDL_GameControllerGetAxis(g, SDL_CONTROLLER_AXIS_LEFTX), ay = SDL_GameControllerGetAxis(g, SDL_CONTROLLER_AXIS_LEFTY);
+    int ax = SDL_GetGamepadAxis(g, SDL_GAMEPAD_AXIS_LEFTX), ay = SDL_GetGamepadAxis(g, SDL_GAMEPAD_AXIS_LEFTY);
     uint8_t b = 0;
-    if (SDL_GameControllerGetButton(g, SDL_CONTROLLER_BUTTON_DPAD_UP) || ay < -16000) b |= UP;
-    if (SDL_GameControllerGetButton(g, SDL_CONTROLLER_BUTTON_DPAD_DOWN) || ay > 16000) b |= DOWN;
-    if (SDL_GameControllerGetButton(g, SDL_CONTROLLER_BUTTON_DPAD_LEFT) || ax < -16000) b |= LEFT;
-    if (SDL_GameControllerGetButton(g, SDL_CONTROLLER_BUTTON_DPAD_RIGHT) || ax > 16000) b |= RIGHT;
-    if (SDL_GameControllerGetButton(g, SDL_CONTROLLER_BUTTON_A)) b |= B1;
-    if (SDL_GameControllerGetButton(g, SDL_CONTROLLER_BUTTON_B)) b |= B2;
-    if (SDL_GameControllerGetButton(g, SDL_CONTROLLER_BUTTON_X)) b |= B3;
-    if (SDL_GameControllerGetButton(g, SDL_CONTROLLER_BUTTON_Y)) b |= B4;
-    *start |= SDL_GameControllerGetButton(g, SDL_CONTROLLER_BUTTON_START);
-    *coin |= SDL_GameControllerGetButton(g, SDL_CONTROLLER_BUTTON_BACK);
+    if (SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_DPAD_UP) || ay < -16000) b |= UP;
+    if (SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_DPAD_DOWN) || ay > 16000) b |= DOWN;
+    if (SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_DPAD_LEFT) || ax < -16000) b |= LEFT;
+    if (SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_DPAD_RIGHT) || ax > 16000) b |= RIGHT;
+    if (SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_SOUTH)) b |= B1;
+    if (SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_EAST)) b |= B2;
+    if (SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_WEST)) b |= B3;
+    if (SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_NORTH)) b |= B4;
+    *start |= SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_START);
+    *coin |= SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_BACK);
     return b;
 }
 
@@ -55,7 +51,7 @@ static uint8_t rotate_dirs(uint8_t b, int tate_cw, int tate_ccw)
 
 void input_frame(Input *in, int freeplay, int rot_cw, int rot_ccw, uint8_t *port_c, uint8_t *port_d, uint8_t *port_l, uint8_t *port_f)
 {
-    const Uint8 *k = SDL_GetKeyboardState(NULL);
+    const bool *k = SDL_GetKeyboardState(NULL);
     /* P1: MAME defaults (arrows, LCtrl LAlt Space LShift) + alternates Z X C V */
     uint8_t p1 = (k[SDL_SCANCODE_UP] ? UP : 0) | (k[SDL_SCANCODE_DOWN] ? DOWN : 0) | (k[SDL_SCANCODE_LEFT] ? LEFT : 0) | (k[SDL_SCANCODE_RIGHT] ? RIGHT : 0)
                | (k[SDL_SCANCODE_LCTRL] || k[SDL_SCANCODE_Z] ? B1 : 0) | (k[SDL_SCANCODE_LALT] || k[SDL_SCANCODE_X] ? B2 : 0)

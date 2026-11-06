@@ -63,44 +63,44 @@ static int move(Menu *m, int d) { m->sel = (m->sel + I_COUNT + d) % I_COUNT; ret
 int menu_event(Menu *m, Config *c, int *show_hud, const SDL_Event *e)
 {
     if (!m->open) {
-        if ((e->type == SDL_KEYDOWN && e->key.keysym.sym == SDLK_F1 && !e->key.repeat) ||
-            (e->type == SDL_CONTROLLERBUTTONDOWN && e->cbutton.button == SDL_CONTROLLER_BUTTON_GUIDE)) {
+        if ((e->type == SDL_EVENT_KEY_DOWN && e->key.key == SDLK_F1 && !e->key.repeat) ||
+            (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e->gbutton.button == SDL_GAMEPAD_BUTTON_GUIDE)) {
             m->open = 1; m->dirty = 0;
         }
-        if (e->type == SDL_CONTROLLERBUTTONDOWN &&
-            (e->cbutton.button == SDL_CONTROLLER_BUTTON_START || e->cbutton.button == SDL_CONTROLLER_BUTTON_BACK)) {
-            SDL_GameController *g = SDL_GameControllerFromInstanceID(e->cbutton.which);   /* Back + Start (XInput often hides Guide) */
-            if (g && SDL_GameControllerGetButton(g, SDL_CONTROLLER_BUTTON_START) && SDL_GameControllerGetButton(g, SDL_CONTROLLER_BUTTON_BACK)) { m->open = 1; m->dirty = 0; }
+        if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN &&
+            (e->gbutton.button == SDL_GAMEPAD_BUTTON_START || e->gbutton.button == SDL_GAMEPAD_BUTTON_BACK)) {
+            SDL_Gamepad *g = SDL_GetGamepadFromID(e->gbutton.which);   /* Back + Start (XInput often hides Guide) */
+            if (g && SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_START) && SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_BACK)) { m->open = 1; m->dirty = 0; }
         }
         return 0;
     }
-    if (e->type == SDL_KEYDOWN) {
-        switch (e->key.keysym.sym) {
+    if (e->type == SDL_EVENT_KEY_DOWN) {
+        switch (e->key.key) {
         case SDLK_F1: case SDLK_ESCAPE: if (e->key.repeat) return 0; m->open = 0; return MENU_CH_CLOSED;
         case SDLK_UP: return move(m, -1);
         case SDLK_DOWN: return move(m, 1);
         case SDLK_LEFT: return change(m, c, show_hud, -1);
         case SDLK_RIGHT: return change(m, c, show_hud, 1);
-        case SDLK_RETURN: case SDLK_KP_ENTER: case SDLK_SPACE: case SDLK_z: return change(m, c, show_hud, 0);
+        case SDLK_RETURN: case SDLK_KP_ENTER: case SDLK_SPACE: case SDLK_Z: return change(m, c, show_hud, 0);
         }
     }
-    if (e->type == SDL_CONTROLLERBUTTONDOWN) {
-        switch (e->cbutton.button) {
-        case SDL_CONTROLLER_BUTTON_GUIDE: case SDL_CONTROLLER_BUTTON_B: m->open = 0; return MENU_CH_CLOSED;
-        case SDL_CONTROLLER_BUTTON_DPAD_UP: return move(m, -1);
-        case SDL_CONTROLLER_BUTTON_DPAD_DOWN: return move(m, 1);
-        case SDL_CONTROLLER_BUTTON_DPAD_LEFT: return change(m, c, show_hud, -1);
-        case SDL_CONTROLLER_BUTTON_DPAD_RIGHT: return change(m, c, show_hud, 1);
-        case SDL_CONTROLLER_BUTTON_A: return change(m, c, show_hud, 0);
+    if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
+        switch (e->gbutton.button) {
+        case SDL_GAMEPAD_BUTTON_GUIDE: case SDL_GAMEPAD_BUTTON_EAST: m->open = 0; return MENU_CH_CLOSED;
+        case SDL_GAMEPAD_BUTTON_DPAD_UP: return move(m, -1);
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN: return move(m, 1);
+        case SDL_GAMEPAD_BUTTON_DPAD_LEFT: return change(m, c, show_hud, -1);
+        case SDL_GAMEPAD_BUTTON_DPAD_RIGHT: return change(m, c, show_hud, 1);
+        case SDL_GAMEPAD_BUTTON_SOUTH: return change(m, c, show_hud, 0);
         }
     }
-    if (e->type == SDL_CONTROLLERAXISMOTION && (e->caxis.axis == SDL_CONTROLLER_AXIS_LEFTY || e->caxis.axis == SDL_CONTROLLER_AXIS_LEFTX)) {
-        int v = e->caxis.value, dir = v > 20000 ? 1 : v < -20000 ? -1 : 0;
+    if (e->type == SDL_EVENT_GAMEPAD_AXIS_MOTION && (e->gaxis.axis == SDL_GAMEPAD_AXIS_LEFTY || e->gaxis.axis == SDL_GAMEPAD_AXIS_LEFTX)) {
+        int v = e->gaxis.value, dir = v > 20000 ? 1 : v < -20000 ? -1 : 0;
         if (!dir) { m->repeat_at = 0; return 0; }
-        Uint32 now = SDL_GetTicks();
+        Uint64 now = SDL_GetTicks();
         if (m->repeat_at && now < m->repeat_at) return 0;
         m->repeat_at = now + (m->repeat_at ? 120 : 350);
-        if (e->caxis.axis == SDL_CONTROLLER_AXIS_LEFTY) return move(m, dir);
+        if (e->gaxis.axis == SDL_GAMEPAD_AXIS_LEFTY) return move(m, dir);
         return change(m, c, show_hud, dir);
     }
     return 0;
@@ -113,7 +113,7 @@ void menu_draw(const Menu *m, const Config *c, int show_hud, SDL_Renderer *r, in
     int x0 = (out_w - w) / 2, y0 = (out_h - h) / 2;
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(r, 0, 0, 0, 210);
-    SDL_Rect bg = {x0, y0, w, h}; SDL_RenderFillRect(r, &bg);
+    SDL_FRect bg = {x0, y0, w, h}; SDL_RenderFillRect(r, &bg);
     SDL_SetRenderDrawColor(r, 255, 255, 255, 255);
     hud_text(r, x0 + cw * 2, y0 + lh / 2, px, "SETTINGS");
     SDL_SetRenderDrawColor(r, 150, 150, 150, 255);
@@ -122,7 +122,7 @@ void menu_draw(const Menu *m, const Config *c, int show_hud, SDL_Renderer *r, in
         int y = y0 + (i + 2) * lh;
         if (i == m->sel) {
             SDL_SetRenderDrawColor(r, 60, 90, 160, 255);
-            SDL_Rect hl = {x0 + cw, y - px * 2, w - 2 * cw, lh}; SDL_RenderFillRect(r, &hl);
+            SDL_FRect hl = {x0 + cw, y - px * 2, w - 2 * cw, lh}; SDL_RenderFillRect(r, &hl);
         }
         SDL_SetRenderDrawColor(r, 255, 255, 255, 255);
         hud_text(r, x0 + cw * 2, y, px, label[i]);

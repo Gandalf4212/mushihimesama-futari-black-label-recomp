@@ -1,7 +1,7 @@
 /* Performance overlay: FPS, emulation time / CPU %, frame time, frame-time graph.
  * Drawn in window space with filled rectangles (always upright, independent of the game rotation).
  * The 5x7 font below is our own (original glyphs: digits, A-Z and a few symbols; also used by the F1 menu).
- * GPU % is not shown yet: SDL2's renderer exposes no GPU timing (planned with the SDL3 GPU layer).
+ * GPU % is not shown yet: the SDL renderer exposes no GPU timing (comes with the SDL3 GPU presenter).
  * GPL-2.0-or-later. */
 #include "hud.h"
 #include "../runtime/cv1k.h"   /* CV1K_FRAME_HZ */
@@ -48,7 +48,7 @@ static const unsigned char *glyph(char c)
 
 void hud_text(SDL_Renderer *r, int x, int y, int px, const char *s)
 {
-    SDL_Rect rc[35 * 64]; int n = 0;
+    SDL_FRect rc[35 * 64]; int n = 0;
     for (; *s; s++, x += 6 * px) {
         const unsigned char *g = glyph(*s);
         if (!g) continue;
@@ -95,7 +95,7 @@ void hud_draw(Hud *h, SDL_Renderer *r, int out_w, int out_h)
     (void)out_w;
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(r, 0, 0, 0, 170);
-    SDL_Rect bg = {x0 - 4, y0 - 4, w + 8, 4 * lh + gh + 12};
+    SDL_FRect bg = {x0 - 4, y0 - 4, w + 8, 4 * lh + gh + 12};
     SDL_RenderFillRect(r, &bg);
     char line[64];
     SDL_SetRenderDrawColor(r, 255, 255, 255, 255);
@@ -103,12 +103,12 @@ void hud_draw(Hud *h, SDL_Renderer *r, int out_w, int out_h)
     snprintf(line, sizeof line, "CPU %5.1f%%  EMU %5.2f MS", h->emu_ms / (1000.0 / CV1K_FRAME_HZ) * 100.0, h->emu_ms);
     text(r, x0, y0 + lh, px, line);
     snprintf(line, sizeof line, "FRAME %5.2f MS  MAX %5.2f", h->frame_ms, h->max_ms); text(r, x0, y0 + 2 * lh, px, line);
-    text(r, x0, y0 + 3 * lh, px, "GPU -- (SDL2)");
+    text(r, x0, y0 + 3 * lh, px, "GPU --");
     /* graph: frame time (white) and emulation time (green) for the last HUD_GRAPH frames, 0-33 ms;
        the line marks one 60 Hz frame (16.7 ms) */
     int gy = y0 + 4 * lh + 4, bw = w / HUD_GRAPH > 0 ? w / HUD_GRAPH : 1;
     double scale = gh / 33.3;
-    SDL_Rect bars[HUD_GRAPH], emu[HUD_GRAPH];
+    SDL_FRect bars[HUD_GRAPH], emu[HUD_GRAPH];
     for (int i = 0; i < HUD_GRAPH; i++) {
         int k = (h->gpos + i) % HUD_GRAPH;
         int fh = (int)(h->graph[k] * scale), eh = (int)(h->emu_graph[k] * scale);
@@ -121,6 +121,6 @@ void hud_draw(Hud *h, SDL_Renderer *r, int out_w, int out_h)
     SDL_SetRenderDrawColor(r, 60, 220, 90, 230);   SDL_RenderFillRects(r, emu, HUD_GRAPH);
     SDL_SetRenderDrawColor(r, 255, 80, 80, 255);
     int ly = gy + gh - (int)(16.683 * scale);
-    SDL_RenderDrawLine(r, x0, ly, x0 + HUD_GRAPH * bw, ly);
+    SDL_RenderLine(r, x0, ly, x0 + HUD_GRAPH * bw, ly);
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE);
 }

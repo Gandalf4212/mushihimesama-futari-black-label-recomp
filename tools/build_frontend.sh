@@ -1,8 +1,8 @@
 #!/bin/sh
 # Build the playable frontend for one game (after tools/build_game.sh generated build/<set>/gen).
-# Usage: tools/build_frontend.sh <set> linux|windows [sdl2_mingw_dir]
+# Usage: tools/build_frontend.sh <set> linux|windows [sdl3_mingw_dir]
 set -e
-SET=$1; TARGET=${2:-linux}; SDLW=${3:-$(cd "$(dirname "$0")/../.." && pwd)/deps/SDL2-2.30.9/x86_64-w64-mingw32}
+SET=$1; TARGET=${2:-linux}; SDLW=${3:-$(cd "$(dirname "$0")/../.." && pwd)/deps/SDL3-3.4.20/x86_64-w64-mingw32}
 G=games/$SET; B=build/$SET; OUT=$B/$TARGET; mkdir -p "$OUT"
 python3 - "$G" > "$B/game_config.h" <<'PY'
 import json, sys
@@ -21,15 +21,15 @@ if [ "$TARGET" = windows ]; then
   CC=x86_64-w64-mingw32-gcc
   mkdir -p "$OUT/obj"
   ls "$B"/gen/*.c | xargs -P"$(nproc)" -I{} sh -c "$CC -O1 -w -Icore/sh3 -c {} -o $OUT/obj/\$(basename {}).o"
-  for f in $SRC; do $CC -O2 -w -Ibuild -I"$B" -Icore/frontend -I"$SDLW/include/SDL2" -Dmain=SDL_main -c $f -o "$OUT/obj/m_$(basename $f).o"; done
+  for f in $SRC; do $CC -O2 -w -Ibuild -I"$B" -Icore/frontend -I"$SDLW/include" -c $f -o "$OUT/obj/m_$(basename $f).o"; done
   for f in $CXXSRC; do x86_64-w64-mingw32-g++ -std=c++20 -O2 -w -c $f -o "$OUT/obj/m_$(basename $f).o"; done
   x86_64-w64-mingw32-g++ -o "$OUT/$SET.exe" "$OUT"/obj/*.o \
-      -L"$SDLW/lib" -lmingw32 -lSDL2main -lSDL2 -mwindows -static-libgcc -static-libstdc++
-  cp "$SDLW/bin/SDL2.dll" "$OUT/"
+      -L"$SDLW/lib" -lmingw32 -lSDL3 -mwindows -static-libgcc -static-libstdc++
+  cp "$SDLW/bin/SDL3.dll" "$OUT/"
 else
   mkdir -p "$OUT/obj"
-  for f in $SRC; do cc -O2 -w -Ibuild -I"$B" -Icore/frontend $(sdl2-config --cflags) -c $f -o "$OUT/obj/m_$(basename $f).o"; done
+  for f in $SRC; do cc -O2 -w -Ibuild -I"$B" -Icore/frontend $(pkg-config --cflags sdl3) -c $f -o "$OUT/obj/m_$(basename $f).o"; done
   for f in $CXXSRC; do g++ -std=c++20 -O2 -w -c $f -o "$OUT/obj/m_$(basename $f).o"; done
-  g++ -o "$OUT/$SET" "$OUT"/obj/m_*.o "$B"/gen/*.c.o $(sdl2-config --libs)
+  g++ -o "$OUT/$SET" "$OUT"/obj/m_*.o "$B"/gen/*.c.o $(pkg-config --libs sdl3)
 fi
 echo "built $OUT"

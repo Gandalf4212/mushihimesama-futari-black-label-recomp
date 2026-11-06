@@ -3,7 +3,7 @@
 ## START HERE (handoff 2026-11-06)
 * Milestones: 1, 2, 3, 5, 6, 10 done; 7 (pixel-exact rendering, timing close to MAME) ongoing;
   9 (sound) first cut done; 11 (frontend) playable on Windows with HUD (F10) and sound.
-* Latest Windows build: F:\claude2\fbl\futaribl_windows_test7.zip (2026-11-06). test6 crackled and slowed
+* Latest Windows build: test9 (see below). Earlier: futaribl_windows_test7.zip (2026-11-06). test6 crackled and slowed
   down in heavy scenes (user): host overruns from (a) a gen pass without the recorded misses and (b) a
   linear search in dispatch.c note_miss once its 4096-entry table was full; fixed (hash, 2nd build pass,
   in-place event service SH3.service). Gameplay host time on the 2-core build box: 12.1 -> 6.3 ms mean.
@@ -16,7 +16,15 @@
   Cause: core/frontend/input.c opened the same controller twice (explicit open at startup + SDL's
   CONTROLLERDEVICEADDED for already-connected pads), so one pad drove both players' inputs incl.
   Start, and free play coined + started both. Now an already-open pad is ignored.
-* **Native rate (2026-11-06, done, not yet in a build):** "pcb" frame_rate option and CV1K_HW_FRAME_HZ removed;
+* **test9 (2026-11-06): F:\claude2\fbl\futaribl_windows_test9.zip = SDL2 -> SDL3 port (SDL 3.4.20) + native rate.**
+  Same SDL_Renderer presentation as test8 (no GPU shaders yet); audio now an SDL_AudioStream
+  (SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES 256), pads via SDL_EVENT_GAMEPAD_ADDED (also fires for pads present
+  at startup; dedup kept). **To confirm on test9:** pads P1/P2, F1 menu (Guide, Back+Start), sound clean
+  and low latency, vsync, fullscreen F11, HUD. Build: deps/SDL3-3.4.20 mingw (tag from `git ls-remote`;
+  the GitHub API is blocked here); Linux frontend build now needs SDL3 (`pkg-config sdl3`), which Ubuntu
+  24.04 lacks: build SDL3 from source if needed. Decided with user: **SDL3 GPU = Vulkan only (SPIR-V via
+  glslang)**; next slice = SDL_GPU presenter (CRT, curved, bezels, integer / fill-keep-aspect, GPU % in HUD).
+* **Native rate (2026-11-06, done, in test9):** "pcb" frame_rate option and CV1K_HW_FRAME_HZ removed;
   frame_rate = "native" (60.024 Hz) | "display"; old "mame"/"pcb" config values read as native; --pcb-rate gone.
 * **User requests (2026-11-06, after test8):** (1) 60.024 Hz is the native rate (MAME: "measured from
   ibara PCB"); our 60.0184 was derived from an assumed 407x262 raster -> drop or rename the "pcb"
@@ -47,7 +55,7 @@
   (now one emulated frame per vsync: >60 Hz displays run fast and drop audio); volume option.
 * Then: F1 menu (reuse HUD font), SDL3 GPU presentation + CRT shaders + bezels, milestone 4 tests.
 * Workspace setup: clone repo; stage F:\claude2\fbl\futaribl\* (4 files); pip install capstone
-  --break-system-packages; apt-get install -y libsdl2-dev mingw-w64 zip lua5.4; SDL2-devel-2.30.9-mingw
+  --break-system-packages; apt-get install -y mingw-w64 zip lua5.4; SDL3-devel-3.4.20-mingw.tar.gz
   from github.com/libsdl-org/SDL releases unpacked in /home/claude/deps; tools/build_game.sh futaribl
   <romdir> (~6.5 min, once; the "misses" number is cumulative), tools/build_frontend.sh futaribl
   windows (~7 min). Build note: core/sound is C++20 (final link with g++). Use mcp device tools for

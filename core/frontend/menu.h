@@ -2,13 +2,13 @@
  * GPL-2.0-or-later. */
 #ifndef MENU_H
 #define MENU_H
-#include <SDL.h>
+#include <SDL3/SDL.h>
 #include "config.h"
 
 typedef struct {
     int open, sel;
     int dirty;              /* a setting changed since the menu opened (save on close) */
-    Uint32 repeat_at;       /* gamepad axis auto-repeat */
+    Uint64 repeat_at;       /* gamepad axis auto-repeat */
 } Menu;
 
 /* What menu_event changed, for the caller to apply. */

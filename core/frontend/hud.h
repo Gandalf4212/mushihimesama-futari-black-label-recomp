@@ -2,7 +2,7 @@
 #ifndef HUD_H
 #define HUD_H
 #include <stdint.h>
-#include <SDL.h>
+#include <SDL3/SDL.h>
 
 #define HUD_GRAPH 120
 
