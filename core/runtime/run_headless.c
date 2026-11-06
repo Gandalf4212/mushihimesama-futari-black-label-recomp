@@ -30,7 +30,7 @@ static void wav_drain(CV1K *m)
     while ((n = cv1k_sound_read(m, buf, 2048)) > 0) { if (g_wav) fwrite(buf, 4, n, g_wav); g_wav_frames += n; }   /* little-endian hosts */
 }
 static const char *g_pc_file; static uint64_t g_pc_first, g_pc_last, g_pc_step, g_pc_next = ~0ull, g_pc_hist[1 << 21], g_pc_total;   /* --pc-profile */
-static uint32_t g_idle_pc; static int g_real_fetch; static uint64_t g_slice_cyc, g_slice_next = ~0ull;
+static uint32_t g_idle_pc; static int g_real_fetch; static uint64_t g_slice_cyc, g_slice_next = ~0ull, g_slice_from;
 static int g_ipra0; static FILE *g_tr; static uint64_t g_tr0 = 233, g_tr1 = 236;   /* --ipra0 */
 static FILE *g_chg_log; static uint32_t g_chg_addr, g_chg_prev = 0xFFFFFFFFu;   /* --change-log (tools/mame/flaglog.lua format) */
 static FILE *g_watch_log; static uint32_t g_watch[16]; static int g_nwatch;   /* --watch-log (tools/mame/watchlog.lua format) */
@@ -90,7 +90,8 @@ int main(int argc, char **argv)
         if (!strcmp(argv[i], "--pc-profile") && i + 4 < argc) { g_pc_file = argv[++i]; g_pc_first = strtoull(argv[++i], 0, 10); g_pc_last = strtoull(argv[++i], 0, 10); g_pc_step = (uint64_t)(atof(argv[++i]) * CV1K_CPU_HZ / 1e6); }   /* PC sample histogram (tools/mame/pclog.lua format) */
         if (!strcmp(argv[i], "--ipra0")) g_ipra0 = 1;
         if (!strcmp(argv[i], "--idle-pc") && i + 1 < argc) g_idle_pc = (uint32_t)strtoul(argv[++i], NULL, 16);   /* MAME speedup idle pc (pcflush = +2) */
-        if (!strcmp(argv[i], "--slice-us") && i + 1 < argc) { g_slice_cyc = (uint64_t)(atof(argv[++i]) * CV1K_CPU_HZ / 1e6); g_slice_next = g_slice_cyc; }   /* extra timeslice ends, like a MAME Lua emu.wait poll */
+        if (!strcmp(argv[i], "--slice-us") && i + 1 < argc) { g_slice_cyc = (uint64_t)(atof(argv[++i]) * CV1K_CPU_HZ / 1e6); if (!g_slice_from) g_slice_next = g_slice_cyc; }   /* extra timeslice ends, like a MAME Lua emu.wait poll */
+        if (!strcmp(argv[i], "--slice-from") && i + 1 < argc) { g_slice_from = strtoull(argv[++i], 0, 10); g_slice_next = ~0ull; }   /* start --slice-us at this frame (like flaglog FLAG_FIRST) */
         if (!strcmp(argv[i], "--real-fetch")) g_real_fetch = 1;   /* charge fetches at the real PC (pre-2026-11-06 model) */
         if (!strcmp(argv[i], "--trace") && i + 3 < argc) { g_tr = fopen(argv[++i], "w"); g_tr0 = strtoull(argv[++i], 0, 10); g_tr1 = strtoull(argv[++i], 0, 10); }   /* IPRA = 0 after every vsync from frame 150: no timer IRQs */
         if (!strcmp(argv[i], "--sound") && i + 2 < argc) { if (!cv1k_load_sound(&m, argv[i + 1], argv[i + 2])) fprintf(stderr, "sound ROMs not loaded\n"); i += 2; }   /* u23 u24 */
@@ -136,7 +137,8 @@ int main(int argc, char **argv)
         if (g_chg_log) { uint32_t v = ram32(&m, g_chg_addr); if (v != g_chg_prev) { fprintf(g_chg_log, "%llu %.9f %08x\n", (unsigned long long)m.frame, (double)s->cycles / (double)CV1K_CPU_HZ, v); g_chg_prev = v; } }
         cv1k_timers(&m);
         if (s->cycles >= m.next_vsync) {
-            cv1k_vsync(&m); m.next_vsync = cv1k_vsync_at(m.frame); if (g_nev) apply_inputs(&m);
+            cv1k_vsync(&m); m.next_vsync = cv1k_vsync_at(m.frame);
+            if (g_slice_cyc && g_slice_from && m.frame == g_slice_from) g_slice_next = s->cycles + g_slice_cyc; if (g_nev) apply_inputs(&m);
             if (m.ymz) wav_drain(&m);
             if (g_ipra0 && m.frame >= 150) { m.onchip[0xFEE2] = m.onchip[0xFEE3] = 0; }
             if (g_pc_file && m.frame == g_pc_first) g_pc_next = s->cycles;

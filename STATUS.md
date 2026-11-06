@@ -15,11 +15,11 @@
   NAND; MAME's test menu shows a Free Play option), locate the free-play byte by toggling it in
   MAME's service menu and diffing NAND/RAM, then have the frontend set it (config `freeplay`) and drop
   the coin injection. Keep `--coins` behaviour for coin-op mode.
-* **Sync (2026-11-06):** three MAME-parity fixes (docs/timing-sync-notes.md 6b, 6c): stale DRC fetch PC,
-  cv1k idle speedup (10 us spin, `run_headless --idle-pc 0C05176A`), VBLANK schedule (60.024 Hz, line
-  240 of 512). Boot now exactly in sync with MAME; stage1 in sync to frame 520, then 0..+2 flips ahead
-  (slightly too fast). Our frame N = MAME watchlog frame N-2. Next: IRQ acceptance at MAME update
-  points. Frontend not rebuilt; it lacks cv1k_set_idle (add GAME_IDLE_PC to game_config.h).
+* **Sync (2026-11-06): done for now.** MAME-parity fixes: stale DRC fetch PC, cv1k idle speedup (10 us spin,
+  `run_headless --idle-pc 0C05176A`), VBLANK at k/60.024 s, IRQs/timeslice ends at MAME update points.
+  Frames 502-700 frame-exact vs MAME (equal polling); unperturbed stage1 73 % identical flips, rest +-1
+  VBLANK; fixed 2-frame shift from the first 29 boot frames. Details: docs/timing-sync-notes.md 6b/6c.
+  Frontend not rebuilt: add cv1k_set_idle (GAME_IDLE_PC/RAM in game_config.h) before the next build.
 * Gamepads P1/P2 confirmed working on test5 (user, 2026-11-06).
 * **Sound next:** compare with MAME `-wavwrite` (same stage1.txt inputs, nvram deleted) against
   `run_headless ... --sound u23 u24 --wav`; pace emulation at 60.018 Hz independent of the display

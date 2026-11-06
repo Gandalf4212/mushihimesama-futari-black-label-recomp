@@ -88,7 +88,7 @@ def body_for(op, pc):
 
 def body_slot(op, pc, in_slot):
     pat, mn, kind, body = ISA[TABLE[op]]
-    acct = f'ACC({base_cycles(op)});' + ('' if in_slot or not is_flush(op) else ' FLUSH();')
+    acct = f'ACC({base_cycles(op)});' + ('' if in_slot or not is_flush(op) else ' FLUSH(); UPDATE_POINT(PC + 2);')
     if not in_slot and is_checkints(op):
         acct = f'ACC({base_cycles(op)}); DROP(); s->fpc = PC + 2;'
     return f'{{ const uint32_t PC = hi | 0x{pc:08X}u; (void)PC; SH3_FETCH(0x{op:04X}u, PC); {fields(pat, op)} {body} {acct} }} /* {mn} */'
@@ -102,11 +102,12 @@ class Gen:
         o = a - RAM_BASE
         return struct.unpack('>H', self.d[o:o + 2])[0]
 
-    def goto(self, tgt, cur_pc, blockset):
+    def goto(self, tgt, cur_pc, blockset, check=True):
         if tgt in blockset:
-            if tgt <= cur_pc:
-                return f'{{ if (s->cycles >= s->event_at) {{ s->pc = hi | 0x{tgt:08X}u; return; }} goto L_{tgt:08X}; }}'
-            return f'goto L_{tgt:08X};'
+            if not check:
+                return f'goto L_{tgt:08X};'
+            # MAME: every generate_update_cycles allows the out-of-cycles exit (forward and backward)
+            return f'{{ if (s->cycles >= s->event_at) {{ s->pc = hi | 0x{tgt:08X}u; return; }} goto L_{tgt:08X}; }}'
         return f'{{ s->pc = hi | 0x{tgt:08X}u; return; }}'
 
     def slot(self, pc):
@@ -134,7 +135,7 @@ class Gen:
                 if kind == 'op':
                     lines.append(body_for(op, pc)); count += 1; pc += 2
                     if pc in blockset:
-                        lines.append(f'FLUSH(); goto L_{pc:08X};')
+                        lines.append(f'FLUSH(); UPDATE_POINT(hi | 0x{pc:08X}u); goto L_{pc:08X};')   # sequence end: MAME update point
                         break
                     continue
                 PCc = f'(hi | 0x{pc:08X}u)'
@@ -146,14 +147,14 @@ class Gen:
                     cond = 'T' if mn.startswith('bt') else '!T'
                     count += 1
                     lines.append(f'if ({cond}) {{ FLUSH(); {self.goto(tgt, pc, blockset)} }}')
-                    lines.append('DROP(); ' + self.goto(pc + 2, pc, blockset))
+                    lines.append('DROP(); ' + self.goto(pc + 2, pc, blockset, False))
                 elif kind == 'cbrs':
                     cond = 'T' if mn.startswith('bt') else '!T'
                     count += 2
                     lines.append(f'{{ const int take = ({cond}) != 0; if (take) {{ {self.slot(pc + 2)} FLUSH(); {self.goto(tgt, pc, blockset)} }} }}')
                     nxt = self.w16(pc + 2)
                     plain = TABLE[nxt] >= 0 and ISA[TABLE[nxt]][2] == 'op'
-                    lines.append('DROP(); ' + (body_slot(nxt, pc + 2, False) + ' ' + self.goto(pc + 4, pc, blockset) if plain else self.goto(pc + 2, pc, blockset)))
+                    lines.append('DROP(); ' + (body_slot(nxt, pc + 2, False) + ' ' + self.goto(pc + 4, pc, blockset, False) if plain else self.goto(pc + 2, pc, blockset, False)))
                 else:
                     count += 2
                     if kind == 'br':
@@ -191,6 +192,7 @@ void sh3_bad_slot(SH3 *s, uint32_t pc);
 #define ACC(n) (s->acc += (n))
 #define FLUSH() do { if (s->acct) { s->cycles += s->acc; } s->acc = 0; } while (0)
 #define DROP() (s->acc = 0)
+#define UPDATE_POINT(next) do { if (s->cycles >= s->event_at) { s->pc = (next); return; } } while (0)   /* MAME update point: timeslice may end here */
 #define SH3_FETCH(op, pc) do { if (s->fetch_hook) { if ((pc) == s->pcflush) s->fpc = (pc); s->cycles += s->fetch_hook(s->bus.ctx, s->stale_fetch ? s->fpc : (pc), (op)); } } while (0)
 '''
 

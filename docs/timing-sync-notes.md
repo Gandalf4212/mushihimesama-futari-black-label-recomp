@@ -126,21 +126,31 @@ Result now: total work +0.34 % vs MAME (was +0.89 %); with timer IRQs disabled o
   dispatch returns, MAME's at update points); (c) the frontend does not call cv1k_set_idle yet (add
   GAME_IDLE_PC/GAME_IDLE_RAM to build_frontend.sh's game_config.h and call it in main_sdl.c).
 
-## 6c. Session 2026-11-06 (later): VBLANK schedule = MAME's
+## 6c. Session 2026-11-06 (later): VBLANK schedule, update points, where we stand
 
-* MAME 0.289 cv1k: `set_refresh(60.024 Hz)`, size 512x512, visarea 0-239, `set_vblank_time(0)` -> VBLANK
-  (IRQ2, `set_vblank_int`) begins at line 240 of every frame: k-th VBLANK at (240/512 + k) / 60.024 s.
-  We had 60.0183806 Hz (real board, 6.4 MHz / (407*262)) and the first VBLANK one full frame after
-  power-on. Now `cv1k_vsync_at(k)`; CV1K_FRAME_HZ = 60.024, CV1K_HW_FRAME_HZ keeps the board value.
-* Frame labels: our watch-log frame N = MAME watchlog frame N-2 (same VBLANK count). Compare with a
-  shift of 2 (the vbl counter 0x0C002310 then matches on all 2851 stage1 frames). watch_diff.py does
-  not shift: its "+2" now means in sync.
-* Boot capture watch_boot.txt (frames 0-160, markers 0C062FA0 ... 0C00262C): every marker exactly
-  in sync (label +2) - program copy, RAM fill, port-J bit-bang (0x0C0570E4 loop) and main-loop start.
-* Stage1 (watch_stage1.txt, shift 2): flip counter 0x0C051040 identical frames 150-520; after that we
-  are 0..+2 flips **ahead** (1805 x +1, 495 x +2, 545 x 0 of 2851): now very slightly too fast,
-  consistent with --slice-us 5 = -0.25 %. Next: IRQ acceptance / timeslice ends at MAME update
-  points (6.1), then recheck. MAME reference files: watch.txt, watch_stage1.txt, watch_boot.txt.
+* VBLANK: MAME 0.289 cv1k uses set_refresh(60.024 Hz). Measured with flaglog (mame_flags_500.txt): the
+  flip at frame 501 is at 8.346676 s = 501.000 / 60.024 + handler time, i.e. VBLANK k at k / 60.024 s
+  (a first guess of "line 240 of 512" was wrong: it put every IRQ 7.8 ms late). Now
+  `cv1k_vsync_at(k)` = (k + 1) / 60.024; CV1K_HW_FRAME_HZ keeps the board's 60.0183806 Hz.
+  Watch-log frame labels now mean the same time on both sides (no shift).
+* IRQ acceptance / timeslice ends at MAME update points (gen_c.py): UPDATE_POINT(PC + 2) after every
+  flushing memory op, the event check on forward as well as backward in-function branches and at
+  sequence fall-ins; none on not-taken conditional branches (MAME drops those cycles). The
+  interpreter still allows an exit after every instruction (not mirrored yet). Cost: stage1 3000 frames
+  headless in 26 s (~115 fps).
+* **Frames 502-700 with equal 5 us polling on both sides** (`run_headless --slice-from 502 --slice-us 5`
+  vs flaglog 500-700): all 151 MAME flips on the same VBLANK in ours (frame-exact). Work time: light
+  frames -0.001 ms, heavy -0.022 ms mean (-0.06 %).
+* Unperturbed stage1 (watch_stage1.txt, no shift): flip counter equal on 2072/2851 frames, otherwise
+  +-1 (one VBLANK) on frames whose work ends very close to a VBLANK. The game's vblank counter
+  0x0C002310 is a constant -2 vs MAME: our main loop starts 2 VBLANKs later.
+* That constant comes from the first ~29 frames of boot (program copy from the boot ROM, on the
+  interpreter): markers (watch_boot.txt) MAME 5/18/28/29/45, ours 6/20/29/31/47; after frame 29
+  every phase is in lockstep (+2). `--real-fetch` gives 6/19/29/30/46, so MAME refreshes its stale
+  PC more often during boot than we do (unknown why: other scheduler events? nocode handler on
+  first execution of each block?). Effect: a fixed 2-frame shift at power-on, no effect on speed.
+* Status: good enough to move on. Leftovers if ever needed: the boot refresh points above, mirroring
+  update points in the interpreter, and heavy frames 0.02 ms fast.
 
 ## 7. Tools (all in the repo)
 

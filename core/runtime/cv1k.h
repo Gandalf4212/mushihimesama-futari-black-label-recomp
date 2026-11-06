@@ -7,10 +7,10 @@
 #include "timing.h"
 
 /* MAME 0.289 cv1k: set_refresh(60.024 Hz), 512 total lines, visarea 0-239, vblank_time 0: VBLANK (IRQ2)
-   starts at line 240 of each frame. The real board is 60.0183806 Hz (6.4 MHz / (407*262)). */
+   ticks on frame boundaries (k / 60.024 s, measured). The real board is 60.0183806 Hz (6.4 MHz / (407*262)). */
 #define CV1K_FRAME_HZ 60.024
 #define CV1K_HW_FRAME_HZ 60.0183806291
-#define CV1K_VBL_FRAC (240.0 / 512.0)
+#define CV1K_VBL_FRAC 1.0   /* VBLANK k (0-based) at (k + 1) / 60.024 s: measured in MAME (flaglog: flip at frame 501 = 501.000 / 60.024 s) */
 #define CV1K_CPU_HZ   102400000.0
 
 typedef struct {
