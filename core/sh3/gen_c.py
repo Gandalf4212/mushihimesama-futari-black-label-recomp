@@ -40,6 +40,13 @@ def base_cycles(op):
     if s == 0xC: return 8 if (op >> 8) & 0xF == 3 else 1
     return 1
 
+def is_checkints(op):
+    # MAME (sh4.cpp generate_group_4_LDCSR/LDCMSR): ldc Rm,SR and ldc.l @Rm+,SR set compiler.checkints, so the
+    # next generate_update_cycles (immediately after them: LDCSR ends its sequence) hash-jumps to CHECKIRQ
+    # before subtracting the cycles: the pending base cycles, including their own, are dropped.
+    return op >> 12 == 4 and (op & 0xFF) in (0x0E, 0x07)
+
+
 def is_flush(op):
     g, lo, lo8 = op >> 12, op & 0xF, op & 0xFF
     if g == 0: return lo in (4, 5, 6, 0xC, 0xD, 0xE)
@@ -82,6 +89,8 @@ def body_for(op, pc):
 def body_slot(op, pc, in_slot):
     pat, mn, kind, body = ISA[TABLE[op]]
     acct = f'ACC({base_cycles(op)});' + ('' if in_slot or not is_flush(op) else ' FLUSH();')
+    if not in_slot and is_checkints(op):
+        acct = f'ACC({base_cycles(op)}); DROP();'
     return f'{{ const uint32_t PC = hi | 0x{pc:08X}u; (void)PC; SH3_FETCH(0x{op:04X}u, PC); {fields(pat, op)} {body} {acct} }} /* {mn} */'
 
 
@@ -158,7 +167,7 @@ class Gen:
                     elif kind == 'ret':
                         lines.append(f'{{ const uint32_t t = PR; {self.slot(pc + 2)} FLUSH(); s->pc = t; return; }}')
                     elif kind == 'rte':
-                        lines.append(f'{{ const uint32_t t = SPC; set_sr(SSR); {self.slot(pc + 2)} FLUSH(); s->pc = t; return; }}')
+                        lines.append(f'{{ const uint32_t t = SPC; set_sr(SSR); {self.slot(pc + 2)} DROP(); s->pc = t; return; }}')   # MAME: RTE sets checkints -> cycles dropped
                     elif kind == 'trap':
                         count -= 1
                         lines.append(f'FLUSH(); s->trap = {op & 0xFF} + 1; s->pc = {PCc} + 2; return;')

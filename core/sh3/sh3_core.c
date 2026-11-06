@@ -86,7 +86,11 @@ void sh3_step(SH3 *s)
     sh3_ops[op](s, op);
     s->insns++;
     int cls = s->acct ? sh3_acct_class(op) : 0;
-    if (s->acct) { s->acc += sh3_base_cycles(op); if (cls == ACCT_FLUSH) { s->cycles += s->acc; s->acc = 0; } }
+    if (s->acct) {
+        s->acc += sh3_base_cycles(op);
+        if ((op & 0xF0FF) == 0x400E || (op & 0xF0FF) == 0x4007) s->acc = 0;   /* ldc Rm,SR / ldc.l @Rm+,SR: MAME checkints drop */
+        else if (cls == ACCT_FLUSH) { s->cycles += s->acc; s->acc = 0; }
+    }
     else s->cycles++;
     if (cls == ACCT_COND && !s->has_slot && s->next_pc == pc + 2) s->acc = 0;          /* not taken: dropped */
     if (s->has_slot) {
@@ -98,7 +102,7 @@ void sh3_step(SH3 *s)
         s->next_pc = pc + 4;
         sh3_ops[op2](s, op2);
         s->insns++;
-        if (s->acct) { s->acc += sh3_base_cycles(op2); s->cycles += s->acc; s->acc = 0; }   /* taken delayed branch */
+        if (s->acct) { s->acc += sh3_base_cycles(op2); if (op == 0x002B) s->acc = 0; else s->cycles += s->acc; s->acc = 0; }   /* taken delayed branch (rte: MAME checkints drop) */
         else s->cycles++;
         s->pc = target;
     } else {

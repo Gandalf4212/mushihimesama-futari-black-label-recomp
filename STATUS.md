@@ -263,6 +263,23 @@
      pen (4.4 miss); TUNI1 137; vblank IRQ2 2623), MAME's apparently ~half. Next: find why MAME's
      interrupt cost is lower (pending ACC handling across the interrupt / DROP in the handler, IRQ
      entry/RTE costs, cache state) and the ~0.5 % fixed per-frame excess (light frames, TMU off).
+   - **MAME checkints cycle drop (2026-11-05, fixed):** MAME's sh4 DRC sets compiler.checkints after
+     RTE, LDC Rm,SR and LDC.L @Rm+,SR; the next generate_update_cycles (immediately after: LDCSR ends
+     its sequence) does CHECKIRQ + HASHJMP *before* subtracting MAPVAR_CYCLES, so the pending base
+     cycles (incl. the instruction's own, and RTE's slot) are never charged. Found with flaglog on the
+     boot-screen loop 0x0C08D05A-0x0C08D0C4 (counter 0x0C7046A0; calls 0x0C05177C, which does
+     ldc r0,sr, twice per iteration): MAME 127.25-127.31 cycles/iteration, ours 129.21 -> now 127.21.
+     (Delay-slot cycles ARE charged by MAME: the slot is compiled with a temporary compiler state, but
+     the subtraction uses MAPVAR_CYCLES, which the slot updates. Verified: removing them gave 120.2.)
+     Result vs MAME per game frame: TMU off light +0.01-0.02 ms / heavy +0.025 ms (was +0.1); normal
+     light +0.02-0.04 ms, heavy +0.12-0.18 ms (was +0.21); total +0.34 % (was +0.89 %). Boot offset
+     now 202 +3 ... 358 +11 ... 589 +11 (was +14). Remaining: timer-interrupt overhead in heavy frames
+     (MAME ~0.275 ms per heavy frame, ours ~0.37 ms; light frames both ~0.05 ms). In-handler cost is the
+     same in light and heavy frames (TUNI0 ~690, TUNI1 ~135, IRQ2 ~2700 cycles), so it is either
+     after-effects on the main thread (cache refills) or MAME's handlers being cheaper.
+     New tools: tools/mame/pclog.lua (statistical PC profile; region attribution differs between MAME's
+     update-point exits and our dispatch exits, so compare only self-contained code such as handlers),
+     run_headless --pc-profile/--ipra0, tools/pc_diff.py; flaglog FLAG_IPRA0=1.
    Old suspect: MAME's RTC9701 starts at the host's current date/time (ours at 0) and the
    game may read it (RNG seed?) after Start. Check: (a) user runs the same MAME capture twice and we
    compare MAME vs MAME (if they differ, MAME is not deterministic here); (b) count RTC read commands
