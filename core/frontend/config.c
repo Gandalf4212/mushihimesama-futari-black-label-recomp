@@ -8,7 +8,7 @@
 void config_defaults(Config *c)
 {
     c->orientation = ORIENT_YOKO; c->scale = 0; c->fullscreen = 0; c->hud = 0;
-    c->slowdown = 1; c->freeplay = 1; c->rotate_controls = 0; c->vsync = 1; c->rate = RATE_MAME; c->volume = 100;
+    c->slowdown = 1; c->freeplay = 1; c->rotate_controls = 0; c->vsync = 1; c->rate = RATE_NATIVE; c->volume = 100;
 }
 
 static char *trim(char *s)
@@ -33,7 +33,7 @@ static void set(Config *c, const char *sec, const char *key, const char *v)
     else if (!strcmp(full, "game.freeplay")) c->freeplay = as_bool(v);
     else if (!strcmp(full, "input.rotate_controls")) c->rotate_controls = as_bool(v);
     else if (!strcmp(full, "video.vsync")) c->vsync = as_bool(v);
-    else if (!strcmp(full, "game.frame_rate")) c->rate = !strcmp(v, "pcb") ? RATE_PCB : !strcmp(v, "display") ? RATE_DISPLAY : RATE_MAME;
+    else if (!strcmp(full, "game.frame_rate")) c->rate = !strcmp(v, "display") ? RATE_DISPLAY : RATE_NATIVE;   /* old "mame"/"pcb" -> native */
     else if (!strcmp(full, "audio.volume")) { c->volume = atoi(v); if (c->volume < 0) c->volume = 0; if (c->volume > 100) c->volume = 100; }
     else fprintf(stderr, "config: unknown key %s\n", full);
 }
@@ -76,7 +76,6 @@ int config_args(Config *c, int argc, char **argv)
         else if (!strcmp(a, "--coins")) c->freeplay = 0;
         else if (!strcmp(a, "--rotate-controls")) c->rotate_controls = 1;
         else if (!strcmp(a, "--no-vsync")) c->vsync = 0;
-        else if (!strcmp(a, "--pcb-rate")) c->rate = RATE_PCB;
         else if (!strcmp(a, "--sync-display")) c->rate = RATE_DISPLAY;
         else if (!strcmp(a, "--volume") && i + 1 < argc) { c->volume = atoi(argv[++i]); if (c->volume < 0) c->volume = 0; if (c->volume > 100) c->volume = 100; }
         else if (!strcmp(a, "--config") || !strcmp(a, "--shot")) i += !strcmp(a, "--shot") ? 2 : 1;   /* handled elsewhere */
@@ -97,8 +96,8 @@ int config_save(const Config *c, const char *path)
     fprintf(f, "# Settings. Command-line flags override these (see README.txt).\n\n");
     fprintf(f, "[video]\norientation = \"%s\"   # yoko | tate-cw | tate-ccw\nscale = %d             # 0 = largest that fits\nfullscreen = %s\nhud = %s             # performance overlay (F10 toggles)\nvsync = %s           # tear-free presentation; game speed is paced separately\n\n",
             o[c->orientation], c->scale, c->fullscreen ? "true" : "false", c->hud ? "true" : "false", c->vsync ? "true" : "false");
-    fprintf(f, "[game]\nslowdown = %s          # original slowdown\nfreeplay = %s          # Start inserts a coin when needed\nframe_rate = \"%s\"      # mame (60.024 Hz) | pcb (60.0184 Hz, real board) | display (1 frame per refresh on ~60 Hz)\n\n[audio]\nvolume = %d            # 0-100\n\n",
-            c->slowdown ? "true" : "false", c->freeplay ? "true" : "false", c->rate == RATE_PCB ? "pcb" : c->rate == RATE_DISPLAY ? "display" : "mame", c->volume);
+    fprintf(f, "[game]\nslowdown = %s          # original slowdown\nfreeplay = %s          # Start inserts a coin when needed\nframe_rate = \"%s\"      # native (60.024 Hz) | display (1 frame per refresh on ~60 Hz)\n\n[audio]\nvolume = %d            # 0-100\n\n",
+            c->slowdown ? "true" : "false", c->freeplay ? "true" : "false", c->rate == RATE_DISPLAY ? "display" : "native", c->volume);
     fprintf(f, "[input]\nrotate_controls = %s   # rotate stick directions with a Tate display\n", c->rotate_controls ? "true" : "false");
     fclose(f);
     return 1;

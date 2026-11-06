@@ -16,6 +16,8 @@
   Cause: core/frontend/input.c opened the same controller twice (explicit open at startup + SDL's
   CONTROLLERDEVICEADDED for already-connected pads), so one pad drove both players' inputs incl.
   Start, and free play coined + started both. Now an already-open pad is ignored.
+* **Native rate (2026-11-06, done, not yet in a build):** "pcb" frame_rate option and CV1K_HW_FRAME_HZ removed;
+  frame_rate = "native" (60.024 Hz) | "display"; old "mame"/"pcb" config values read as native; --pcb-rate gone.
 * **User requests (2026-11-06, after test8):** (1) 60.024 Hz is the native rate (MAME: "measured from
   ibara PCB"); our 60.0184 was derived from an assumed 407x262 raster -> drop or rename the "pcb"
   frame_rate option (config.c, menu.c, cv1k.h CV1K_HW_FRAME_HZ, docs/hardware/cv1000.md). (2) After SDL3:

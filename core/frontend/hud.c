@@ -4,6 +4,7 @@
  * GPU % is not shown yet: SDL2's renderer exposes no GPU timing (planned with the SDL3 GPU layer).
  * GPL-2.0-or-later. */
 #include "hud.h"
+#include "../runtime/cv1k.h"   /* CV1K_FRAME_HZ */
 #include <stdio.h>
 #include <string.h>
 
@@ -99,7 +100,7 @@ void hud_draw(Hud *h, SDL_Renderer *r, int out_w, int out_h)
     char line[64];
     SDL_SetRenderDrawColor(r, 255, 255, 255, 255);
     snprintf(line, sizeof line, "FPS %6.2f", h->fps);                               text(r, x0, y0, px, line);
-    snprintf(line, sizeof line, "CPU %5.1f%%  EMU %5.2f MS", h->emu_ms / (1000.0 / 60.0183806291) * 100.0, h->emu_ms);
+    snprintf(line, sizeof line, "CPU %5.1f%%  EMU %5.2f MS", h->emu_ms / (1000.0 / CV1K_FRAME_HZ) * 100.0, h->emu_ms);
     text(r, x0, y0 + lh, px, line);
     snprintf(line, sizeof line, "FRAME %5.2f MS  MAX %5.2f", h->frame_ms, h->max_ms); text(r, x0, y0 + 2 * lh, px, line);
     text(r, x0, y0 + 3 * lh, px, "GPU -- (SDL2)");

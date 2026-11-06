@@ -2,7 +2,7 @@
  * Usage:
  *   <exe> --setup <rom_dir>     one-time: copy the needed ROM data into ./assets (ROM not needed after)
  *   <exe> [--yoko | --tate-cw | --tate-ccw] [--scale N] [--fullscreen] [--no-slowdown] [--rotate-controls]
- *         [--volume 0-100] [--no-vsync] [--pcb-rate] [--no-sound] [--coins] [--hud]
+ *         [--volume 0-100] [--no-vsync] [--no-sound] [--coins] [--hud]
  * Keys: arrows move, Z X C V = buttons 1-4, 5 coin, 1 start, 2 P2 start, 6 coin 2, F2 test, 9 service,
  *       F1 settings menu, F10 performance HUD, F11 fullscreen, Esc quit. Gamepad Guide = menu. Gamepad: d-pad/left stick, A B X Y = buttons 1-4, Back coin, Start start.
  * GPL-2.0-or-later. */
@@ -151,8 +151,8 @@ int main(int argc, char **argv)
     uint32_t entry = GAME_MAIN_ENTRY;
     g_m.next_vsync = cv1k_vsync_at(0);
     int running = 1, booted = 0;
-    /* Pacing: game frames run on a wall clock at the arcade rate (60.024 Hz like MAME, or the board's
-       60.0184 Hz), independent of the display. Presentation uses the display's vsync (no tearing): on a
+    /* Pacing: game frames run on a wall clock at the arcade rate (60.024 Hz, the native rate
+       measured on a PCB, same as MAME), independent of the display. Presentation uses the display's vsync (no tearing): on a
        60 Hz display about one frame per refresh (one is doubled or dropped every ~40 s), on faster
        displays a frame is shown on 2-3 refreshes. Input is read right before each frame runs. */
     const double freq = (double)SDL_GetPerformanceFrequency();
@@ -180,7 +180,7 @@ int main(int argc, char **argv)
             }
             if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_F10) show_hud = !show_hud;
         }
-        const double period = 1.0 / (cfg.rate == RATE_PCB ? CV1K_HW_FRAME_HZ : CV1K_FRAME_HZ);
+        const double period = 1.0 / CV1K_FRAME_HZ;
         int sync_display = 0;
         if (cfg.rate == RATE_DISPLAY && cfg.vsync) {                                 /* MAME -syncrefresh style */
             SDL_DisplayMode wm; if (SDL_GetWindowDisplayMode(win, &wm) == 0 && wm.refresh_rate >= 59 && wm.refresh_rate <= 61) sync_display = 1;

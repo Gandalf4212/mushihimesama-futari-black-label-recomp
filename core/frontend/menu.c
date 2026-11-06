@@ -15,7 +15,7 @@ void menu_init(Menu *m) { memset(m, 0, sizeof *m); }
 static void value(const Config *c, int show_hud, int i, char *out, size_t n)
 {
     static const char *orient[] = {"YOKO", "TATE CW", "TATE CCW"};
-    static const char *rate[] = {"MAME 60.024 HZ", "PCB 60.018 HZ", "DISPLAY REFRESH"};
+    static const char *rate[] = {"NATIVE 60.024 HZ", "DISPLAY REFRESH"};
     switch (i) {
     case I_ORIENT: snprintf(out, n, "%s", orient[c->orientation]); break;
     case I_SCALE: if (c->scale) snprintf(out, n, "%dX", c->scale); else snprintf(out, n, "AUTO"); break;
@@ -45,7 +45,7 @@ static int change(Menu *m, Config *c, int *show_hud, int dir)
     case I_SCALE: c->scale = (c->scale + 9 + d) % 9; ch = MENU_CH_SCALE; break;       /* 0 = auto, 1..8 */
     case I_FULLSCREEN: c->fullscreen = !c->fullscreen; ch = MENU_CH_FULLSCREEN; break;
     case I_VSYNC: c->vsync = !c->vsync; ch = MENU_CH_VSYNC; break;
-    case I_RATE: c->rate = (c->rate + 3 + d) % 3; ch = MENU_CH_RATE; break;
+    case I_RATE: c->rate = (c->rate + 2 + d) % 2; ch = MENU_CH_RATE; break;
     case I_SLOWDOWN: c->slowdown = !c->slowdown; ch = MENU_CH_SLOWDOWN; break;
     case I_FREEPLAY: c->freeplay = !c->freeplay; break;
     case I_VOLUME: c->volume += 10 * d; if (c->volume < 0) c->volume = 0; if (c->volume > 100) c->volume = 100; break;

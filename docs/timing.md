@@ -62,5 +62,5 @@ read routine) cannot appear at all until memory costs are modeled.
   today's 600 fps headless, still far above 60 fps. Profile and keep the `fast` path for fetches.
 
 ## "No slowdown" option (milestone 11)
-Run with timing `off` for CPU cost while keeping vsync at 60.018 Hz: the game never misses a frame.
+Run with timing `off` for CPU cost while keeping vsync at 60.024 Hz: the game never misses a frame.
 Note this changes game behavior (Cave games are designed around their slowdown), so it stays opt-in.
