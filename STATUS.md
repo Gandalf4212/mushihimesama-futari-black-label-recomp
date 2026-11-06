@@ -3,8 +3,10 @@
 ## START HERE (handoff 2026-11-05)
 * Milestones: 1, 2, 3, 5, 6, 10 done; 7 (pixel-exact rendering, timing close to MAME) ongoing;
   9 (sound) first cut done; 11 (frontend) playable on Windows with HUD (F10) and sound.
-* Latest Windows build: F:\claude2\fbl\futaribl_windows_test5.zip (sound, HUD, timing fixes,
-  gamepad-duplication fix). User report on test4: sound great, HUD fine.
+* Latest Windows build: F:\claude2\fbl\futaribl_windows_test6.zip (2026-11-06): wall-clock pacing at
+  60.024 Hz (config game.frame_rate = mame|pcb, --pcb-rate), video.vsync / --no-vsync, audio.volume /
+  --volume, idle speedup wired in, all 2026-11-06 timing fixes. To confirm: smooth on the user's
+  display, no audio crackle, volume works. (test5: gamepad-duplication fix, confirmed.) User report on test4: sound great, HUD fine.
 * **Bug fixed in test5 (to confirm):** after a death, Start brought in P1 and P2, both on one pad.
   Cause: core/frontend/input.c opened the same controller twice (explicit open at startup + SDL's
   CONTROLLERDEVICEADDED for already-connected pads), so one pad drove both players' inputs incl.

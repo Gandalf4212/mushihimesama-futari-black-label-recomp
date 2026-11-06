@@ -2,6 +2,7 @@
  * Usage:
  *   <exe> --setup <rom_dir>     one-time: copy the needed ROM data into ./assets (ROM not needed after)
  *   <exe> [--yoko | --tate-cw | --tate-ccw] [--scale N] [--fullscreen] [--no-slowdown] [--rotate-controls]
+ *         [--volume 0-100] [--no-vsync] [--pcb-rate] [--no-sound] [--coins] [--hud]
  * Keys: arrows move, Z X C V = buttons 1-4, 5 coin, 1 start, 2 P2 start, 6 coin 2, F2 test, 9 service,
  *       F11 fullscreen, Esc quit. Gamepad: d-pad/left stick, A B X Y = buttons 1-4, Back coin, Start start.
  * GPL-2.0-or-later. */
@@ -103,6 +104,9 @@ int main(int argc, char **argv)
         if (f) fclose(f); else if (!make_sound_image(GAME_SET)) make_sound_image("roms/" GAME_SET);
         if (!no_sound && !cv1k_load_sound_image(&g_m, "assets/sound.bin")) fprintf(stderr, "no assets/sound.bin: silent\n");
     }
+#ifdef GAME_IDLE_PC
+    cv1k_set_idle(&g_m, GAME_IDLE_PC, GAME_IDLE_RAM);   /* MAME's idle speedup (part of its timing) */
+#endif
     if (!slowdown) cv1k_set_timing(&g_m, 0);
     blit_ref_init(&g_blit); g_m.blit.on_exec = on_exec;
     dispatch_init(g_m.ram_size);
@@ -116,7 +120,7 @@ int main(int argc, char **argv)
     if (ww < vw * scale) ww = vw * scale;
     SDL_Window *win = SDL_CreateWindow(GAME_TITLE, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, ww, wh,
                                        SDL_WINDOW_RESIZABLE | (fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0));
-    SDL_Renderer *ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    SDL_Renderer *ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | (cfg.vsync ? SDL_RENDERER_PRESENTVSYNC : 0));
     SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "0");
     SDL_Texture *tex = SDL_CreateTexture(ren, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, 320, 240);
     Input in; input_init(&in);
@@ -139,8 +143,14 @@ int main(int argc, char **argv)
     uint32_t entry = GAME_MAIN_ENTRY;
     g_m.next_vsync = cv1k_vsync_at(0);
     int running = 1, booted = 0;
+    /* Pacing: game frames run on a wall clock at the arcade rate (60.024 Hz like MAME, or the board's
+       60.0184 Hz), independent of the display. Presentation uses the display's vsync (no tearing): on a
+       60 Hz display about one frame per refresh (one is doubled or dropped every ~40 s), on faster
+       displays a frame is shown on 2-3 refreshes. Input is read right before each frame runs. */
+    const double period = 1.0 / (cfg.pcb_rate ? CV1K_HW_FRAME_HZ : CV1K_FRAME_HZ);
+    const double freq = (double)SDL_GetPerformanceFrequency();
+    double due = (double)SDL_GetPerformanceCounter() / freq;
     while (running) {
-        /* ---- input: read right before the frame runs ---- */
         SDL_Event e;
         while (SDL_PollEvent(&e)) {
             if (e.type == SDL_QUIT) running = 0;
@@ -152,28 +162,39 @@ int main(int argc, char **argv)
             if (e.type == SDL_CONTROLLERDEVICEADDED) input_pad_added(&in, e.cdevice.which);
             if (e.type == SDL_CONTROLLERDEVICEREMOVED) input_pad_removed(&in, e.cdevice.which);
         }
-        input_frame(&in, cfg.freeplay, cfg.rotate_controls && orient == ROT_TATE_CW, cfg.rotate_controls && orient == ROT_TATE_CCW,
-                    &g_m.in.c, &g_m.in.d, &g_m.in.l, &g_m.in.f);
-
-        /* ---- run exactly one frame (until the next vsync) ---- */
+        /* ---- wait until the next game frame is due (sleep, then spin the last ~1.5 ms) ---- */
+        for (;;) {
+            double now = (double)SDL_GetPerformanceCounter() / freq, left = due - now;
+            if (left <= 0) break;
+            if (left > 0.002) SDL_Delay((Uint32)((left - 0.0015) * 1000));
+        }
+        double now = (double)SDL_GetPerformanceCounter() / freq;
+        if (now - due > 4 * period) due = now;            /* after a stall (window drag, breakpoint): don't race */
+        /* ---- run every frame that is due (at most 3 per present) ---- */
         uint64_t t_emu = SDL_GetPerformanceCounter();
-        while (s->cycles < g_m.next_vsync) {               /* same order as run_headless (verified vs MAME) */
-            cv1k_check_irq(&g_m);
-            { uint64_t te = cv1k_next_event(&g_m); s->event_at = te < g_m.next_vsync ? te : g_m.next_vsync; }
-            if (s->sleeping) { s->cycles = s->event_at; cv1k_timers(&g_m); continue; }
-            if (!booted && (s->pc & 0x1FFFFFFFu) == (entry & 0x1FFFFFFFu)) booted = 1;
-            if (!booted) sh3_step(s);                        /* the game's own boot code, on the interpreter */
-            else dispatch_step(s);
-            if (s->trap) cv1k_take_trap(&g_m);
-            cv1k_timers(&g_m);
+        for (int ran = 0; ran < 3 && due <= now; ran++, due += period) {
+            if (ran) SDL_PumpEvents();
+            input_frame(&in, cfg.freeplay, cfg.rotate_controls && orient == ROT_TATE_CW, cfg.rotate_controls && orient == ROT_TATE_CCW,
+                        &g_m.in.c, &g_m.in.d, &g_m.in.l, &g_m.in.f);
+            while (s->cycles < g_m.next_vsync) {               /* same order as run_headless (verified vs MAME) */
+                cv1k_check_irq(&g_m);
+                { uint64_t te = cv1k_next_event(&g_m); s->event_at = te < g_m.next_vsync ? te : g_m.next_vsync; }
+                if (s->sleeping) { s->cycles = s->event_at; cv1k_timers(&g_m); continue; }
+                if (!booted && (s->pc & 0x1FFFFFFFu) == (entry & 0x1FFFFFFFu)) booted = 1;
+                if (!booted) sh3_step(s);                        /* the game's own boot code, on the interpreter */
+                else dispatch_step(s);
+                if (s->trap) cv1k_take_trap(&g_m);
+                cv1k_timers(&g_m);
+            }
+            cv1k_vsync(&g_m); g_m.next_vsync = cv1k_vsync_at(g_m.frame);
+            if (g_m.ymz) {
+                cv1k_sound_catchup(&g_m);
+                int n = cv1k_sound_read(&g_m, abuf, 4096);
+                if (cfg.volume < 100) for (int k = 0; k < 2 * n; k++) abuf[k] = (int16_t)(abuf[k] * cfg.volume / 100);
+                /* the queue stays short (low latency); with wall-clock pacing it only overflows after a stall */
+                if (adev && n > 0 && SDL_GetQueuedAudioSize(adev) < 6u * 267 * 4) SDL_QueueAudio(adev, abuf, (Uint32)n * 4);
+            }
         }
-        cv1k_vsync(&g_m); g_m.next_vsync = cv1k_vsync_at(g_m.frame);
-        if (g_m.ymz) {
-            cv1k_sound_catchup(&g_m);
-            int n = cv1k_sound_read(&g_m, abuf, 4096);
-            if (adev && n > 0 && SDL_GetQueuedAudioSize(adev) < 4u * 267 * 4) SDL_QueueAudio(adev, abuf, (Uint32)n * 4);
-        }
-
         /* ---- present ---- */
         blit_ref_frame(&g_blit, g_m.blit.scroll_x, g_m.blit.scroll_y, fb);
         SDL_UpdateTexture(tex, NULL, fb, 320 * 4);
@@ -190,7 +211,7 @@ int main(int argc, char **argv)
         SDL_RenderClear(ren);
         SDL_RenderCopyEx(ren, tex, NULL, &dst, angle, NULL, SDL_FLIP_NONE);
         if (show_hud) hud_draw(&hud, ren, ow, oh);
-        if ((long)g_m.frame == shot_frame) {
+        if ((long)g_m.frame >= shot_frame && shot_frame >= 0) {
             SDL_Surface *sf = SDL_CreateRGBSurfaceWithFormat(0, ow, oh, 32, SDL_PIXELFORMAT_ARGB8888);
             SDL_RenderReadPixels(ren, NULL, SDL_PIXELFORMAT_ARGB8888, sf->pixels, sf->pitch);
             SDL_SaveBMP(sf, shot_path); SDL_FreeSurface(sf); running = 0;
