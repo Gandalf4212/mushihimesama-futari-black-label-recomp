@@ -12,3 +12,9 @@ u24
 *.bin
 __pycache__/
 *.pyc
+
+# user artwork packs (not ours, never committed)
+Bezel/
+bezel/
+artwork/
+*.lay

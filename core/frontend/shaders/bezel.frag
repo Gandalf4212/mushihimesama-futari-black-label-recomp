@@ -44,15 +44,19 @@ void main()
     // ambient glow: average of the picture near the closest edge point, fading with distance
     vec2 t = (px - (c - half_)) / (2.0 * half_);
     vec2 e = clamp(t, 0.0, 1.0);
+    // wide, soft average along the nearest edge (a 7x3 grid over +-35 % of the edge, 12 % deep), so the
+    // glow follows the picture's overall colour there instead of streaking out each row
     vec3 a = vec3(0.0);
-    for (int i = -2; i <= 2; i++) {
-        vec2 o = abs(t.x - e.x) > abs(t.y - e.y) ? vec2(0.0, float(i) * 0.06) : vec2(float(i) * 0.06, 0.0);
-        vec2 in_ = e + (vec2(0.5) - e) * 0.04 + o;              // just inside the edge
-        a += texture(u_tex, game_uv(in_)).rgb;
-    }
-    a /= 5.0;
+    bool side = abs(t.x - e.x) > abs(t.y - e.y);
+    for (int i = -3; i <= 3; i++)
+        for (int j = 0; j < 3; j++) {
+            float along = float(i) * 0.115, depth = 0.02 + float(j) * 0.05;
+            vec2 q = side ? vec2(e.x < 0.5 ? depth : 1.0 - depth, e.y + along) : vec2(e.x + along, e.y < 0.5 ? depth : 1.0 - depth);
+            a += texture(u_tex, game_uv(q)).rgb;
+        }
+    a /= 21.0;
     float dist = length((t - e) * 2.0 * half_) / outp.y;
-    col += a * outp.w * exp(-dist * 9.0) * (d > 22.0 * unit ? 1.0 : 0.35);
+    col += a * outp.w * exp(-dist * 6.0) * (d > 22.0 * unit ? 1.0 : 0.35);
 
     o_color = vec4(col, 1.0) * v_color;
 }

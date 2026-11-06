@@ -16,6 +16,13 @@
   Cause: core/frontend/input.c opened the same controller twice (explicit open at startup + SDL's
   CONTROLLERDEVICEADDED for already-connected pads), so one pad drove both players' inputs incl.
   Start, and free play coined + started both. Now an already-open pad is ignored.
+* **test12 (2026-11-06): artwork packs.** core/frontend/layout.c reads MAME .lay bezel packs (elements with
+  one image; views with screen/backdrop/overlay/bezel bounds; drawn backdrop, screen, overlay = MOD
+  multiply, bezel = alpha; the view's box is fit to the output and the game goes in its screen rect).
+  Config video.artwork = path to .lay or PNG (empty: auto Bezel/default.lay, artwork/default.lay);
+  video.bezel = 0 off | 1 ours | 2.. artwork view N-1 (F1 menu cycles). User's pack (Mushihimesama 1.5,
+  not ours, never commit; .gitignore covers Bezel/ artwork/ *.lay) names art1.png but ships 04.png: user
+  must rename. Our bezel's glow (test11 "colour bleed" = per-row streaks) now a wide 7x3 average, 0.30.
 * **test11 (2026-11-06): GPU presentation.** core/frontend/present.c: SDL3 GPU renderer forced to Vulkan
   (SDL_HINT_GPU_DRIVER), our GLSL shaders (core/frontend/shaders/game.frag, bezel.frag) -> SPIR-V by
   glslangValidator (apt glslang-tools) -> build/<set>/shaders_spv.h, run via SDL_GPURenderState (custom

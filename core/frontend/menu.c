@@ -21,7 +21,7 @@ static void value(const Config *c, int show_hud, int i, char *out, size_t n)
     case I_SCALE: if (c->scale) snprintf(out, n, "%dX", c->scale); else snprintf(out, n, "AUTO"); break;
     case I_SCALING: snprintf(out, n, "%s", c->scaling == SCALING_INTEGER ? "INTEGER" : "FIT (KEEP ASPECT)"); break;
     case I_SHADER: { static const char *sh[] = {"NONE", "SHARP", "CRT", "CRT CURVED"}; snprintf(out, n, "%s", sh[c->shader]); break; }
-    case I_BEZEL: snprintf(out, n, "%s", c->bezel ? "ON (YOKO)" : "OFF"); break;
+    case I_BEZEL: if (c->bezel >= 2) snprintf(out, n, "ARTWORK VIEW %d", c->bezel - 1); else snprintf(out, n, "%s", c->bezel ? "OURS" : "OFF"); break;
     case I_UNCAPPED: snprintf(out, n, "%s", c->uncapped ? "ON (BENCHMARK)" : "OFF"); break;
     case I_FULLSCREEN: snprintf(out, n, "%s", c->fullscreen ? "ON" : "OFF"); break;
     case I_VSYNC: snprintf(out, n, "%s", c->vsync ? "ON" : "OFF"); break;
@@ -49,7 +49,7 @@ static int change(Menu *m, Config *c, int *show_hud, int dir)
     case I_SCALE: c->scale = (c->scale + 9 + d) % 9; ch = MENU_CH_SCALE; break;       /* 0 = auto, 1..8 */
     case I_SCALING: c->scaling = !c->scaling; break;
     case I_SHADER: c->shader = (c->shader + 4 + d) % 4; break;
-    case I_BEZEL: c->bezel = !c->bezel; break;
+    case I_BEZEL: { int nb = 2 + c->artwork_views; c->bezel = (c->bezel + nb + d) % nb; break; }
     case I_UNCAPPED: c->uncapped = !c->uncapped; ch = MENU_CH_VSYNC; break;
     case I_FULLSCREEN: c->fullscreen = !c->fullscreen; ch = MENU_CH_FULLSCREEN; break;
     case I_VSYNC: c->vsync = !c->vsync; ch = MENU_CH_VSYNC; break;

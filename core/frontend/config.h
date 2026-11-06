@@ -18,8 +18,10 @@ typedef struct {
     int volume;                /* [audio] volume = 100 (0-100) */
     int scaling;               /* [video] scaling = "fit" (largest, keeps aspect) | "integer" */
     int shader;                /* [video] shader = "none" | "sharp" | "crt" | "crt-curved" */
-    int bezel;                 /* [video] bezel = true (Yoko: our bezel; plus bezel_image if set) */
-    char bezel_image[260];     /* [video] bezel_image = "" (optional PNG/BMP overlay with a transparent screen) */
+    int bezel;                 /* [video] bezel = 0 off | 1 ours (procedural) | 2.. artwork view 1.. (Yoko only) */
+    char artwork[260];         /* [video] artwork = "" : a MAME .lay (bezel pack) or a PNG overlay; empty = look
+                                  for Bezel/default.lay or artwork/default.lay next to the program */
+    int artwork_views;         /* runtime: views in the loaded .lay (not saved) */
     int uncapped;              /* [video] uncapped = false (benchmark: present as fast as possible; game stays 60.024 Hz) */
 } Config;
 void config_defaults(Config *c);
