@@ -1,5 +1,34 @@
 # Status
 
+## START HERE (handoff 2026-11-05)
+* Milestones: 1, 2, 3, 5, 6, 10 done; 7 (pixel-exact rendering, timing close to MAME) ongoing;
+  9 (sound) first cut done; 11 (frontend) playable on Windows with HUD (F10) and sound.
+* Latest Windows build: F:\claude2\fbl\futaribl_windows_test5.zip (sound, HUD, timing fixes,
+  gamepad-duplication fix). User report on test4: sound great, HUD fine.
+* **Bug fixed in test5 (to confirm):** after a death, Start brought in P1 and P2, both on one pad.
+  Cause: core/frontend/input.c opened the same controller twice (explicit open at startup + SDL's
+  CONTROLLERDEVICEADDED for already-connected pads), so one pad drove both players' inputs incl.
+  Start, and free play coined + started both. Now an already-open pad is ignored.
+* **Free play redesign (user request):** today free play is a frontend trick (a Start press inserts a
+  coin for 4 frames, then presses Start; input.c). Wanted: use the game's own FREE PLAY setting
+  instead. Plan: find the settings block in NAND/EEPROM (the game keeps settings + high scores in
+  NAND; MAME's test menu shows a Free Play option), locate the free-play byte by toggling it in
+  MAME's service menu and diffing NAND/RAM, then have the frontend set it (config `freeplay`) and drop
+  the coin injection. Keep `--coins` behaviour for coin-op mode.
+* **Sync:** see docs/timing-sync-notes.md (everything tried, numbers, tools, best guesses). Next
+  step there: IRQ acceptance at MAME's update points (gen_c.py), then re-run flag_diff/watch_diff.
+* **Sound next:** compare with MAME `-wavwrite` (same stage1.txt inputs, nvram deleted) against
+  `run_headless ... --sound u23 u24 --wav`; pace emulation at 60.018 Hz independent of the display
+  (now one emulated frame per vsync: >60 Hz displays run fast and drop audio); volume option.
+* Then: F1 menu (reuse HUD font), SDL3 GPU presentation + CRT shaders + bezels, milestone 4 tests.
+* Workspace setup: clone repo; stage F:\claude2\fbl\futaribl\* (4 files); pip install capstone
+  --break-system-packages; apt-get install -y libsdl2-dev mingw-w64 zip lua5.4; SDL2-devel-2.30.9-mingw
+  from github.com/libsdl-org/SDL releases unpacked in /home/claude/deps; tools/build_game.sh futaribl
+  <romdir> (~6.5 min, once; the "misses" number is cumulative), tools/build_frontend.sh futaribl
+  windows (~7 min). Build note: core/sound is C++20 (final link with g++). Use mcp device tools for
+  F:\claude2\fbl; device_commit_files can resend a stale copy if the staged file name is reused:
+  give each new output a new file name.
+
 **Last session:** Day 1 (2026-11-04). Milestones 1, 2, 3, 5, 6 done; milestone 7 rendering pixel-exact vs MAME; milestone 10 timing model in (MAME 0.289 parity) (milestone 4 unit tests deferred).
 
 ## Done

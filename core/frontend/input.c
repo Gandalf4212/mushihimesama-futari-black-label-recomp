@@ -11,6 +11,11 @@ void input_init(Input *in) { memset(in, 0, sizeof *in); }
 
 void input_pad_added(Input *in, int device_index)
 {
+    /* SDL sends CONTROLLERDEVICEADDED at startup for pads that are already connected, and main_sdl.c
+       also opens them explicitly: ignore a pad that is already open, or one pad would drive P1 and P2. */
+    SDL_JoystickID id = SDL_JoystickGetDeviceInstanceID(device_index);
+    for (int p = 0; p < 2; p++)
+        if (in->pad[p] && SDL_JoystickInstanceID(SDL_GameControllerGetJoystick(in->pad[p])) == id) return;
     for (int p = 0; p < 2; p++) if (!in->pad[p]) { in->pad[p] = SDL_GameControllerOpen(device_index); return; }
 }
 
