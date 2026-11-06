@@ -21,6 +21,7 @@
 #include "../render/blit_ref.h"
 #include "game_config.h"
 #include "config.h"
+#include "hud.h"
 #include "input.h"   /* generated per game: GAME_SET, GAME_TITLE, GAME_RAM_SIZE, GAME_MAIN_ENTRY, GAME_U4, GAME_U2 */
 
 static BlitRef g_blit;
@@ -101,6 +102,7 @@ int main(int argc, char **argv)
     for (int i = 0; i < SDL_NumJoysticks(); i++) if (SDL_IsGameController(i)) input_pad_added(&in, i);
 
     static uint32_t fb[320 * 240];
+    Hud hud; hud_init(&hud); int show_hud = cfg.hud;
     SH3 *s = &g_m.cpu;
     uint32_t entry = GAME_MAIN_ENTRY;
     g_m.next_vsync = g_m.cycles_per_frame;
@@ -114,6 +116,7 @@ int main(int argc, char **argv)
             if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_F11) {
                 fullscreen = !fullscreen; SDL_SetWindowFullscreen(win, fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
             }
+            if (e.type == SDL_KEYDOWN && e.key.keysym.sym == SDLK_F10) show_hud = !show_hud;
             if (e.type == SDL_CONTROLLERDEVICEADDED) input_pad_added(&in, e.cdevice.which);
             if (e.type == SDL_CONTROLLERDEVICEREMOVED) input_pad_removed(&in, e.cdevice.which);
         }
@@ -121,6 +124,7 @@ int main(int argc, char **argv)
                     &g_m.in.c, &g_m.in.d, &g_m.in.l, &g_m.in.f);
 
         /* ---- run exactly one frame (until the next vsync) ---- */
+        uint64_t t_emu = SDL_GetPerformanceCounter();
         while (s->cycles < g_m.next_vsync) {               /* same order as run_headless (verified vs MAME) */
             cv1k_check_irq(&g_m);
             { uint64_t te = cv1k_next_event(&g_m); s->event_at = te < g_m.next_vsync ? te : g_m.next_vsync; }
@@ -136,6 +140,7 @@ int main(int argc, char **argv)
         /* ---- present ---- */
         blit_ref_frame(&g_blit, g_m.blit.scroll_x, g_m.blit.scroll_y, fb);
         SDL_UpdateTexture(tex, NULL, fb, 320 * 4);
+        t_emu = SDL_GetPerformanceCounter() - t_emu;       /* emulation + software blitter */
         int ow, oh; SDL_GetRendererOutputSize(ren, &ow, &oh);
         int sc = 1; while ((sc + 1) * vw <= ow && (sc + 1) * vh <= oh) sc++;   /* integer scale */
         int dw = vw * sc, dh = vh * sc;
@@ -147,12 +152,14 @@ int main(int argc, char **argv)
         SDL_SetRenderDrawColor(ren, 0, 0, 0, 255);
         SDL_RenderClear(ren);
         SDL_RenderCopyEx(ren, tex, NULL, &dst, angle, NULL, SDL_FLIP_NONE);
+        if (show_hud) hud_draw(&hud, ren, ow, oh);
         if ((long)g_m.frame == shot_frame) {
             SDL_Surface *sf = SDL_CreateRGBSurfaceWithFormat(0, ow, oh, 32, SDL_PIXELFORMAT_ARGB8888);
             SDL_RenderReadPixels(ren, NULL, SDL_PIXELFORMAT_ARGB8888, sf->pixels, sf->pitch);
             SDL_SaveBMP(sf, shot_path); SDL_FreeSurface(sf); running = 0;
         }
         SDL_RenderPresent(ren);
+        hud_frame(&hud, t_emu, SDL_GetPerformanceCounter());
     }
     /* save settings / high scores */
     if (g_m.rtc.dirty) { FILE *f = fopen("assets/eeprom.bin", "wb"); if (f) { fwrite(g_m.rtc.eeprom, 1, sizeof g_m.rtc.eeprom, f); fclose(f); } }

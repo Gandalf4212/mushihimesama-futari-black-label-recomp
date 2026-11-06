@@ -8,6 +8,7 @@ typedef struct {
     Orientation orientation;   /* [video] orientation = "yoko" | "tate-cw" | "tate-ccw" */
     int scale;                 /* [video] scale = 0 (auto) */
     int fullscreen;            /* [video] fullscreen = false */
+    int hud;                   /* [video] hud = false (performance overlay, F10 toggles) */
     int slowdown;              /* [game]  slowdown = true (original timing) */
     int freeplay;              /* [game]  freeplay = true (Start inserts a coin when needed) */
     int rotate_controls;       /* [input] rotate_controls = false */

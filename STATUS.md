@@ -145,6 +145,12 @@
 - **Windows test build 2 (2026-11-05, futaribl_windows_test2.zip, commit 22eb817)**: user report: game
   runs, CLI switches work, smooth, feels similar to the original (no overlay yet to measure).
 
+- **Performance HUD (2026-11-05)**: core/frontend/hud.c (own 5x7 font): FPS, CPU % (= emulation +
+  software blitter time / 16.66 ms), EMU ms, frame time + max, 120-frame graph (frame time grey,
+  emulation green, 16.7 ms line). F10 toggles; `[video] hud = true|false`, `--hud` / `--no-hud`.
+  GPU % shows "--" until the SDL3 GPU layer (SDL2 renderer has no GPU timing). Windows build:
+  futaribl_windows_test3.zip (includes today's timing fixes).
+
 ## Decisions (2026-11-04)
 - **No Vulkan blitter.** The CPU reference blitter (MAME-exact) renders the game image; the GPU is used
   only for presentation. Milestone 8 is now: **GPU presentation layer on SDL3's GPU API** (Vulkan /
@@ -161,7 +167,7 @@
    mpeg_audio.cpp; check licenses), sound ROMs u23/u24 (word-swapped) into assets/ at setup, SDL audio
    output; headless WAV dump for checking against MAME (`mame -wavwrite`).
 2. GPU presentation layer (SDL3 GPU) + CRT/curved shaders + bezels.
-3. F1 menu + overlay (needs a small bitmap font: write our own 8x8 font, no third-party font files).
+3. F1 menu (reuse the HUD font in core/frontend/hud.c). Overlay done (F10).
 4. **Stage-1 gameplay comparison (first try, 2026-11-04)**: MAME capture F:\claude2\fbl\mame_snaps_stage1
    (2400-4200 every 10, stage1.txt, fresh nvram). Ours with --frame-offset -1: MAME 2500 (mode select)
    identical; from 2600 (character select) on no exact match (closest differs by ~8.5k pixels at 2600;

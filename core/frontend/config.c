@@ -7,7 +7,7 @@
 
 void config_defaults(Config *c)
 {
-    c->orientation = ORIENT_YOKO; c->scale = 0; c->fullscreen = 0;
+    c->orientation = ORIENT_YOKO; c->scale = 0; c->fullscreen = 0; c->hud = 0;
     c->slowdown = 1; c->freeplay = 1; c->rotate_controls = 0;
 }
 
@@ -28,6 +28,7 @@ static void set(Config *c, const char *sec, const char *key, const char *v)
         c->orientation = !strcmp(v, "tate-cw") ? ORIENT_TATE_CW : !strcmp(v, "tate-ccw") ? ORIENT_TATE_CCW : ORIENT_YOKO;
     } else if (!strcmp(full, "video.scale")) c->scale = atoi(v);
     else if (!strcmp(full, "video.fullscreen")) c->fullscreen = as_bool(v);
+    else if (!strcmp(full, "video.hud")) c->hud = as_bool(v);
     else if (!strcmp(full, "game.slowdown")) c->slowdown = as_bool(v);
     else if (!strcmp(full, "game.freeplay")) c->freeplay = as_bool(v);
     else if (!strcmp(full, "input.rotate_controls")) c->rotate_controls = as_bool(v);
@@ -63,6 +64,8 @@ int config_args(Config *c, int argc, char **argv)
         else if (!strcmp(a, "--scale") && i + 1 < argc) c->scale = atoi(argv[++i]);
         else if (!strcmp(a, "--fullscreen")) c->fullscreen = 1;
         else if (!strcmp(a, "--windowed")) c->fullscreen = 0;
+        else if (!strcmp(a, "--hud")) c->hud = 1;
+        else if (!strcmp(a, "--no-hud")) c->hud = 0;
         else if (!strcmp(a, "--no-slowdown")) c->slowdown = 0;
         else if (!strcmp(a, "--slowdown")) c->slowdown = 1;
         else if (!strcmp(a, "--freeplay")) c->freeplay = 1;
@@ -83,8 +86,8 @@ int config_save(const Config *c, const char *path)
     FILE *f = fopen(path, "w"); if (!f) return 0;
     static const char *o[] = {"yoko", "tate-cw", "tate-ccw"};
     fprintf(f, "# Settings. Command-line flags override these (see README.txt).\n\n");
-    fprintf(f, "[video]\norientation = \"%s\"   # yoko | tate-cw | tate-ccw\nscale = %d             # 0 = largest that fits\nfullscreen = %s\n\n",
-            o[c->orientation], c->scale, c->fullscreen ? "true" : "false");
+    fprintf(f, "[video]\norientation = \"%s\"   # yoko | tate-cw | tate-ccw\nscale = %d             # 0 = largest that fits\nfullscreen = %s\nhud = %s             # performance overlay (F10 toggles)\n\n",
+            o[c->orientation], c->scale, c->fullscreen ? "true" : "false", c->hud ? "true" : "false");
     fprintf(f, "[game]\nslowdown = %s          # original slowdown\nfreeplay = %s          # Start inserts a coin when needed\n\n",
             c->slowdown ? "true" : "false", c->freeplay ? "true" : "false");
     fprintf(f, "[input]\nrotate_controls = %s   # rotate stick directions with a Tate display\n", c->rotate_controls ? "true" : "false");

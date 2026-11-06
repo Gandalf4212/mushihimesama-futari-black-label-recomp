@@ -12,7 +12,7 @@ print(f'#define GAME_SET "{g["set"]}"\n#define GAME_TITLE "{g["title"].split(" (
 print(f'#define GAME_RAM_SIZE {int(g["ram_size"], 16)}u\n#define GAME_MAIN_ENTRY {g["boot"]["main_entry"]}u')
 print(f'#define GAME_U4 "{f["maincpu"]}"\n#define GAME_U2 "{f["nand"]}"')
 PY
-SRC="core/frontend/main_sdl.c core/frontend/config.c core/frontend/input.c core/runtime/cv1k.c core/runtime/timing.c core/runtime/dispatch.c core/render/blit_ref.c core/sh3/sh3_core.c"
+SRC="core/frontend/main_sdl.c core/frontend/config.c core/frontend/input.c core/frontend/hud.c core/runtime/cv1k.c core/runtime/timing.c core/runtime/dispatch.c core/render/blit_ref.c core/sh3/sh3_core.c"
 if [ "$TARGET" = windows ]; then
   CC=x86_64-w64-mingw32-gcc
   mkdir -p "$OUT/obj"
