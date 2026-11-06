@@ -151,6 +151,21 @@
   GPU % shows "--" until the SDL3 GPU layer (SDL2 renderer has no GPU timing). Windows build:
   futaribl_windows_test3.zip (includes today's timing fixes).
 
+- **Sound, milestone 9 first cut (2026-11-05)**: core/sound/mpeg_audio.{cpp,h} (MAME decoder,
+  unchanged except includes) + core/sound/ymz770.{cpp,h} (YMZ770 port, C API; YMZ774 left out).
+  cv1k.c: writes to 0x10400000-7 render samples up to the write's CPU cycle first (one sample =
+  6400 cycles = 102.4 MHz / 16 kHz, like MAME's stream update), output ring of 16384 stereo frames,
+  cv1k_load_sound (u23/u24 word-swapped) / cv1k_load_sound_image (assets/sound.bin). run_headless
+  `--sound u23 u24 --wav out.wav`. Frontend: setup writes assets/sound.bin (also created on start if
+  an older assets/ lacks it), SDL audio 16 kHz S16 stereo, per-frame SDL_QueueAudio, frame audio
+  dropped when > ~4 frames queued; `--no-sound`. Attract (no coin) is silent like the game's demo
+  sound default; with stage1.txt the coin/menus/stage 1 produce audio (RMS ~1000-1500). Not yet
+  verified against MAME `-wavwrite` (next: capture MAME wav with the same input script, compare
+  sample-exact after aligning). Build: C++20 for the two sound files, final link with g++ (Windows:
+  -static-libgcc -static-libstdc++; exe needs only SDL2.dll). Windows build: futaribl_windows_test4.zip.
+  Known: one emulated frame per vsync, so on displays above 60 Hz the game and audio run fast (audio
+  frames get dropped); proper fix = pace emulation to 60.018 Hz independent of the display.
+
 ## Decisions (2026-11-04)
 - **No Vulkan blitter.** The CPU reference blitter (MAME-exact) renders the game image; the GPU is used
   only for presentation. Milestone 8 is now: **GPU presentation layer on SDL3's GPU API** (Vulkan /
@@ -163,7 +178,7 @@
   config.toml.
 
 ## Next
-1. **Sound (milestone 9)**: YMZ770 (MAME src/devices/sound/ymz770.cpp + its MPEG-like decoder
+1. **Sound (milestone 9)**: first cut done (see Done); remaining: compare with MAME -wavwrite, pacing/resampling for non-60 Hz displays, volume option. Original plan: YMZ770 (MAME src/devices/sound/ymz770.cpp + its MPEG-like decoder
    mpeg_audio.cpp; check licenses), sound ROMs u23/u24 (word-swapped) into assets/ at setup, SDL audio
    output; headless WAV dump for checking against MAME (`mame -wavwrite`).
 2. GPU presentation layer (SDL3 GPU) + CRT/curved shaders + bezels.

@@ -37,6 +37,20 @@ static int copy_file(const char *from, const char *to)
     fclose(a); fclose(b); return 1;
 }
 
+/* assets/sound.bin: the YMZ770 ROM (u23+u24), word-swapped once here so the game loads it directly */
+static int make_sound_image(const char *romdir)
+{
+#ifdef GAME_SND0
+    CV1K *t = calloc(1, sizeof *t); char a[1024], b[1024]; int ok = 0;
+    snprintf(a, sizeof a, "%s/%s", romdir, GAME_SND0); snprintf(b, sizeof b, "%s/%s", romdir, GAME_SND1);
+    if (t && cv1k_load_sound(t, a, b)) ok = cv1k_save_sound_image(t, "assets/sound.bin");
+    free(t);   /* the decoder state is small; the process exits or reloads from sound.bin */
+    return ok;
+#else
+    (void)romdir; return 0;
+#endif
+}
+
 static int setup(const char *romdir)
 {
     char p[1024];
@@ -45,6 +59,7 @@ static int setup(const char *romdir)
     if (!copy_file(p, "assets/program.bin")) return 1;
     snprintf(p, sizeof p, "%s/%s", romdir, GAME_U2);
     if (!copy_file(p, "assets/nand.bin")) return 1;
+    if (!make_sound_image(romdir)) fprintf(stderr, "sound ROMs not found: the game will be silent\n");
     printf("assets/ created. The ROM files are no longer needed to play.\n");
     return 0;
 }
@@ -55,10 +70,11 @@ static int setup(const char *romdir)
 
 int main(int argc, char **argv)
 {
-    long shot_frame = -1; const char *shot_path = NULL; const char *cfg_path = "config.toml";
+    long shot_frame = -1; const char *shot_path = NULL; const char *cfg_path = "config.toml"; int no_sound = 0;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--setup") && i + 1 < argc) return setup(argv[i + 1]);
         if (!strcmp(argv[i], "--config") && i + 1 < argc) cfg_path = argv[i + 1];
+        if (!strcmp(argv[i], "--no-sound")) no_sound = 1;
         if (!strcmp(argv[i], "--shot") && i + 2 < argc) { shot_frame = atol(argv[i + 1]); shot_path = argv[i + 2]; }   /* debug */
     }
     Config cfg; config_defaults(&cfg);
@@ -82,11 +98,16 @@ int main(int argc, char **argv)
         FILE *f = fopen("assets/eeprom.bin", "rb");
         if (f) { if (fread(g_m.rtc.eeprom, 1, sizeof g_m.rtc.eeprom, f) != sizeof g_m.rtc.eeprom) fprintf(stderr, "short eeprom.bin\n"); fclose(f); }
     }
+    {   /* sound: assets/sound.bin (made at setup; made now if an older assets/ lacks it) */
+        FILE *f = fopen("assets/sound.bin", "rb");
+        if (f) fclose(f); else if (!make_sound_image(GAME_SET)) make_sound_image("roms/" GAME_SET);
+        if (!no_sound && !cv1k_load_sound_image(&g_m, "assets/sound.bin")) fprintf(stderr, "no assets/sound.bin: silent\n");
+    }
     if (!slowdown) cv1k_set_timing(&g_m, 0);
     blit_ref_init(&g_blit); g_m.blit.on_exec = on_exec;
     dispatch_init(g_m.ram_size);
 
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER) != 0) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); return 1; }
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_AUDIO) != 0) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); return 1; }
     SDL_DisplayMode dm; SDL_GetDesktopDisplayMode(0, &dm);
     /* native buffer is 320x240 landscape; ROT270 game -> upright view is the buffer rotated 270 deg clockwise */
     int vw = orient == ROT_YOKO ? 240 : 320, vh = orient == ROT_YOKO ? 320 : 240;
@@ -103,6 +124,17 @@ int main(int argc, char **argv)
 
     static uint32_t fb[320 * 240];
     Hud hud; hud_init(&hud); int show_hud = cfg.hud;
+    /* audio: YMZ770 output is 16 kHz stereo; SDL converts to the device format. Each frame's samples
+       are queued right after the frame; the queue is kept short (low latency) by dropping a frame's
+       audio when more than ~4 frames are already waiting (e.g. on displays faster than 60 Hz). */
+    SDL_AudioDeviceID adev = 0;
+    if (g_m.ymz) {
+        SDL_AudioSpec want = {0}, have;
+        want.freq = 16000; want.format = AUDIO_S16SYS; want.channels = 2; want.samples = 256;
+        adev = SDL_OpenAudioDevice(NULL, 0, &want, &have, 0);
+        if (adev) SDL_PauseAudioDevice(adev, 0); else fprintf(stderr, "audio: %s\n", SDL_GetError());
+    }
+    static int16_t abuf[4096 * 2];
     SH3 *s = &g_m.cpu;
     uint32_t entry = GAME_MAIN_ENTRY;
     g_m.next_vsync = g_m.cycles_per_frame;
@@ -136,6 +168,11 @@ int main(int argc, char **argv)
             cv1k_timers(&g_m);
         }
         cv1k_vsync(&g_m); g_m.next_vsync += g_m.cycles_per_frame;
+        if (g_m.ymz) {
+            cv1k_sound_catchup(&g_m);
+            int n = cv1k_sound_read(&g_m, abuf, 4096);
+            if (adev && n > 0 && SDL_GetQueuedAudioSize(adev) < 4u * 267 * 4) SDL_QueueAudio(adev, abuf, (Uint32)n * 4);
+        }
 
         /* ---- present ---- */
         blit_ref_frame(&g_blit, g_m.blit.scroll_x, g_m.blit.scroll_y, fb);

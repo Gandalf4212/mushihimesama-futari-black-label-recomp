@@ -13,5 +13,9 @@ Verify a ROM set: `python3 tools/verify_roms.py games/futaribl/romset.json path/
 Contributors: run `git config core.hooksPath .githooks` once so commits are checked for game data.
 
 Hardware knowledge credits: the MAME project (`src/mame/cave/cv1k.cpp` and related devices).
+`core/sound/mpeg_audio.*` (Olivier Galibert) and `core/sound/ymz770.cpp` (port of the YMZ770 device by
+Olivier Galibert, R. Belmont, MetalliC) come from MAME 0.289 and remain under MAME's BSD-3-Clause
+licence (headers kept); the blitter busy-time and DMA/timer/cache timing models follow MAME's
+`cv1k_v.cpp`, `sh4dmac.cpp`, `sh4tmu.cpp`, `sh7709s.cpp` and `sh4.cpp` (BSD-3-Clause).
 
 License: GPL-2.0-or-later.

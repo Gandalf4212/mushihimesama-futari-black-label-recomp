@@ -13,6 +13,22 @@ static CV1K *g_m;
 #include <string.h>
 #include <time.h>
 static FILE *g_kick_log;   /* --kick-log */
+static FILE *g_wav; static uint64_t g_wav_frames;   /* --wav: 16-bit stereo PCM of the YMZ770 output */
+static void wav_header(FILE *f, uint32_t rate, uint64_t frames)
+{
+    uint32_t data = (uint32_t)(frames * 4), v;
+    fseek(f, 0, SEEK_SET);
+    fwrite("RIFF", 1, 4, f); v = 36 + data; fwrite(&v, 4, 1, f); fwrite("WAVEfmt ", 1, 8, f);
+    v = 16; fwrite(&v, 4, 1, f); uint16_t w = 1; fwrite(&w, 2, 1, f); w = 2; fwrite(&w, 2, 1, f);
+    fwrite(&rate, 4, 1, f); v = rate * 4; fwrite(&v, 4, 1, f); w = 4; fwrite(&w, 2, 1, f); w = 16; fwrite(&w, 2, 1, f);
+    fwrite("data", 1, 4, f); fwrite(&data, 4, 1, f);
+}
+static void wav_drain(CV1K *m)
+{
+    int16_t buf[2048 * 2]; int n;
+    cv1k_sound_catchup(m);
+    while ((n = cv1k_sound_read(m, buf, 2048)) > 0) { if (g_wav) fwrite(buf, 4, n, g_wav); g_wav_frames += n; }   /* little-endian hosts */
+}
 static const char *g_pc_file; static uint64_t g_pc_first, g_pc_last, g_pc_step, g_pc_next = ~0ull, g_pc_hist[1 << 21], g_pc_total;   /* --pc-profile */
 static int g_ipra0; static FILE *g_tr; static uint64_t g_tr0 = 233, g_tr1 = 236;   /* --ipra0 */
 static FILE *g_chg_log; static uint32_t g_chg_addr, g_chg_prev = 0xFFFFFFFFu;   /* --change-log (tools/mame/flaglog.lua format) */
@@ -73,6 +89,8 @@ int main(int argc, char **argv)
         if (!strcmp(argv[i], "--pc-profile") && i + 4 < argc) { g_pc_file = argv[++i]; g_pc_first = strtoull(argv[++i], 0, 10); g_pc_last = strtoull(argv[++i], 0, 10); g_pc_step = (uint64_t)(atof(argv[++i]) * CV1K_CPU_HZ / 1e6); }   /* PC sample histogram (tools/mame/pclog.lua format) */
         if (!strcmp(argv[i], "--ipra0")) g_ipra0 = 1;
         if (!strcmp(argv[i], "--trace") && i + 3 < argc) { g_tr = fopen(argv[++i], "w"); g_tr0 = strtoull(argv[++i], 0, 10); g_tr1 = strtoull(argv[++i], 0, 10); }   /* IPRA = 0 after every vsync from frame 150: no timer IRQs */
+        if (!strcmp(argv[i], "--sound") && i + 2 < argc) { if (!cv1k_load_sound(&m, argv[i + 1], argv[i + 2])) fprintf(stderr, "sound ROMs not loaded\n"); i += 2; }   /* u23 u24 */
+        if (!strcmp(argv[i], "--wav") && i + 1 < argc) { g_wav = fopen(argv[++i], "wb"); if (g_wav) wav_header(g_wav, 16000, 0); }
         if (!strcmp(argv[i], "--kick-log") && i + 1 < argc) g_kick_log = fopen(argv[++i], "w");   /* time of every blitter kick */
         if (!strcmp(argv[i], "--tmstats") && i + 2 < argc) { st_from = strtoull(argv[++i], 0, 10); st_to = strtoull(argv[++i], 0, 10); }
         if (!strcmp(argv[i], "--timing") && i + 1 < argc) timing = strcmp(argv[++i], "off") != 0;
@@ -109,6 +127,7 @@ int main(int argc, char **argv)
         cv1k_timers(&m);
         if (s->cycles >= m.next_vsync) {
             cv1k_vsync(&m); m.next_vsync += m.cycles_per_frame; if (g_nev) apply_inputs(&m);
+            if (m.ymz) wav_drain(&m);
             if (g_ipra0 && m.frame >= 150) { m.onchip[0xFEE2] = m.onchip[0xFEE3] = 0; }
             if (g_pc_file && m.frame == g_pc_first) g_pc_next = s->cycles;
             if (g_pc_file && m.frame == g_pc_last) { g_pc_next = ~0ull; FILE *f = fopen(g_pc_file, "w"); if (f) { for (uint32_t r = 0; r < (1u << 21); r++) if (g_pc_hist[r]) fprintf(f, "%06x %llu\n", r, (unsigned long long)g_pc_hist[r]); fclose(f); } }
@@ -145,6 +164,7 @@ int main(int argc, char **argv)
         }
         cv1k_check_irq(&m);
     }
+    if (g_wav) { wav_header(g_wav, 16000, g_wav_frames); fclose(g_wav); printf("wav: %llu frames (%.1f s) written\n", (unsigned long long)g_wav_frames, g_wav_frames / 16000.0); }
     double secs = (double)(clock() - t0) / CLOCKS_PER_SEC;
     for (int i = 0; i < 128; i++) if (g_blit.mode_use[i]) printf("mode blend=%d s=%d d=%d used:%s%s\n", i >> 6, (i >> 3) & 7, i & 7, g_blit.mode_use[i] & 1 ? " before" : "", g_blit.mode_use[i] & 2 ? " charsel+" : "");
     for (int i = 0; i < m.reg_used; i++) printf("reg read %08x x%llu\n", m.reg_addr[i], (unsigned long long)m.reg_n[i]);

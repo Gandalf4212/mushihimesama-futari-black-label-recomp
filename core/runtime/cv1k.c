@@ -1,5 +1,6 @@
 /* CV1000 machine implementation. See cv1k.h for credits. GPL-2.0-or-later. */
 #include "cv1k.h"
+#include "../sound/ymz770.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -343,7 +344,14 @@ static void dev_write(CV1K *m, uint32_t a, uint32_t v, int size)
         switch (p & 7) { case 0: nand_write(&m->nand, v); break; case 1: nand_cmd(&m->nand, v); break; case 2: nand_addr(&m->nand, v); break; }
         return;
     }
-    if (p >= 0x10400000u && p < 0x10400008u) { m->sound_writes++; return; }   /* YMZ770: milestone 9 */
+    if (p >= 0x10400000u && p < 0x10400008u) {                          /* YMZ770 (8-bit port, byte lanes) */
+        m->sound_writes++;
+        if (m->ymz) {
+            cv1k_sound_catchup(m);                                         /* MAME: m_stream->update() first */
+            for (int k = 0; k < size; k++) ymz770_write(m->ymz, (p - 0x10400000u) + k, (uint8_t)(v >> (8 * (size - 1 - k))));
+        }
+        return;
+    }
     if (p == 0x10C00001u) { rtc_write(&m->rtc, v); return; }
     if (p >= 0x18000000u && p < 0x18000058u) {
         Blitter *b = &m->blit;
@@ -537,6 +545,70 @@ void cv1k_take_trap(CV1K *m)
     m->onchip[0xFFD0] = 0; m->onchip[0xFFD1] = 0; m->onchip[0xFFD2] = tra >> 8; m->onchip[0xFFD3] = tra;
     m->onchip[0xFFD4] = 0; m->onchip[0xFFD5] = 0; m->onchip[0xFFD6] = ev >> 8; m->onchip[0xFFD7] = ev;
     sh3_interrupt(s, 0x100, 0);   /* SPC = s->pc (already the next instruction) */
+}
+
+/* ---------------- sound (YMZ770, core/sound) ---------------- */
+#define SND_CYCLES_PER_SAMPLE ((uint64_t)(CV1K_CPU_HZ / (CV1K_SND_CLOCK / 1024)))   /* 6400 */
+void cv1k_sound_catchup(CV1K *m)
+{
+    if (!m->ymz) return;
+    while (m->snd_next <= m->cpu.cycles) {
+        uint32_t n = (uint32_t)((m->cpu.cycles - m->snd_next) / SND_CYCLES_PER_SAMPLE) + 1;
+        uint32_t room = CV1K_SND_BUF - (m->snd_head % CV1K_SND_BUF);
+        if (n > room) n = room;
+        ymz770_render(m->ymz, &m->snd_buf[2 * (m->snd_head % CV1K_SND_BUF)], (int)n);
+        m->snd_head += n; m->snd_samples += n; m->snd_next += n * SND_CYCLES_PER_SAMPLE;
+        if (m->snd_head - m->snd_tail > CV1K_SND_BUF) m->snd_tail = m->snd_head - CV1K_SND_BUF;   /* nobody reading: drop oldest */
+    }
+}
+
+int cv1k_sound_read(CV1K *m, int16_t *out, int max)
+{
+    int n = 0;
+    while (n < max && m->snd_tail != m->snd_head) {
+        uint32_t i = m->snd_tail % CV1K_SND_BUF;
+        out[2 * n] = m->snd_buf[2 * i]; out[2 * n + 1] = m->snd_buf[2 * i + 1];
+        m->snd_tail++; n++;
+    }
+    return n;
+}
+
+static int sound_start(CV1K *m)
+{
+    m->ymz = ymz770_create(m->snd_rom, m->snd_rom_size, CV1K_SND_CLOCK);
+    m->snd_next = m->cpu.cycles;
+    return m->ymz != NULL;
+}
+
+int cv1k_load_sound(CV1K *m, const char *u23, const char *u24)
+{
+    FILE *f[2] = {fopen(u23, "rb"), fopen(u24, "rb")};
+    if (!f[0] || !f[1]) { if (f[0]) fclose(f[0]); if (f[1]) fclose(f[1]); return 0; }
+    m->snd_rom_size = 0x800000; m->snd_rom = malloc(m->snd_rom_size);
+    memset(m->snd_rom, 0xFF, m->snd_rom_size);                          /* ROMREGION_ERASEFF */
+    for (int k = 0; k < 2; k++) {
+        uint8_t *d = m->snd_rom + k * 0x400000;
+        size_t got = fread(d, 1, 0x400000, f[k]); fclose(f[k]);
+        for (size_t i = 0; i + 1 < got; i += 2) { uint8_t t = d[i]; d[i] = d[i + 1]; d[i + 1] = t; }   /* ROM_LOAD16_WORD_SWAP */
+    }
+    return sound_start(m);
+}
+
+int cv1k_load_sound_image(CV1K *m, const char *bin)
+{
+    FILE *f = fopen(bin, "rb"); if (!f) return 0;
+    m->snd_rom_size = 0x800000; m->snd_rom = malloc(m->snd_rom_size);
+    size_t got = fread(m->snd_rom, 1, m->snd_rom_size, f); fclose(f);
+    if (got != m->snd_rom_size) { free(m->snd_rom); m->snd_rom = NULL; return 0; }
+    return sound_start(m);
+}
+
+int cv1k_save_sound_image(CV1K *m, const char *bin)
+{
+    if (!m->snd_rom) return 0;
+    FILE *f = fopen(bin, "wb"); if (!f) return 0;
+    int ok = fwrite(m->snd_rom, 1, m->snd_rom_size, f) == m->snd_rom_size; fclose(f);
+    return ok;
 }
 
 /* ---------------- setup ---------------- */

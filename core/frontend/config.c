@@ -66,6 +66,7 @@ int config_args(Config *c, int argc, char **argv)
         else if (!strcmp(a, "--windowed")) c->fullscreen = 0;
         else if (!strcmp(a, "--hud")) c->hud = 1;
         else if (!strcmp(a, "--no-hud")) c->hud = 0;
+        else if (!strcmp(a, "--no-sound")) ;   /* handled in main_sdl.c */
         else if (!strcmp(a, "--no-slowdown")) c->slowdown = 0;
         else if (!strcmp(a, "--slowdown")) c->slowdown = 1;
         else if (!strcmp(a, "--freeplay")) c->freeplay = 1;
