@@ -14,7 +14,7 @@ static CV1K *g_m;
 #include <time.h>
 static FILE *g_kick_log;   /* --kick-log */
 static const char *g_pc_file; static uint64_t g_pc_first, g_pc_last, g_pc_step, g_pc_next = ~0ull, g_pc_hist[1 << 21], g_pc_total;   /* --pc-profile */
-static int g_ipra0;   /* --ipra0 */
+static int g_ipra0; static FILE *g_tr; static uint64_t g_tr0 = 233, g_tr1 = 236;   /* --ipra0 */
 static FILE *g_chg_log; static uint32_t g_chg_addr, g_chg_prev = 0xFFFFFFFFu;   /* --change-log (tools/mame/flaglog.lua format) */
 static FILE *g_watch_log; static uint32_t g_watch[16]; static int g_nwatch;   /* --watch-log (tools/mame/watchlog.lua format) */
 static void on_exec(void *ctx, uint32_t list) { (void)ctx;
@@ -71,7 +71,8 @@ int main(int argc, char **argv)
         if (!strcmp(argv[i], "--watch-log") && i + 2 < argc) { g_watch_log = fopen(argv[++i], "w"); for (char *t = strtok(argv[++i], ","); t && g_nwatch < 16; t = strtok(NULL, ",")) g_watch[g_nwatch++] = (uint32_t)strtoul(t, 0, 16); }
         if (!strcmp(argv[i], "--change-log") && i + 2 < argc) { g_chg_log = fopen(argv[++i], "w"); g_chg_addr = (uint32_t)strtoul(argv[++i], 0, 16); }
         if (!strcmp(argv[i], "--pc-profile") && i + 4 < argc) { g_pc_file = argv[++i]; g_pc_first = strtoull(argv[++i], 0, 10); g_pc_last = strtoull(argv[++i], 0, 10); g_pc_step = (uint64_t)(atof(argv[++i]) * CV1K_CPU_HZ / 1e6); }   /* PC sample histogram (tools/mame/pclog.lua format) */
-        if (!strcmp(argv[i], "--ipra0")) g_ipra0 = 1;   /* IPRA = 0 after every vsync from frame 150: no timer IRQs */
+        if (!strcmp(argv[i], "--ipra0")) g_ipra0 = 1;
+        if (!strcmp(argv[i], "--trace") && i + 3 < argc) { g_tr = fopen(argv[++i], "w"); g_tr0 = strtoull(argv[++i], 0, 10); g_tr1 = strtoull(argv[++i], 0, 10); }   /* IPRA = 0 after every vsync from frame 150: no timer IRQs */
         if (!strcmp(argv[i], "--kick-log") && i + 1 < argc) g_kick_log = fopen(argv[++i], "w");   /* time of every blitter kick */
         if (!strcmp(argv[i], "--tmstats") && i + 2 < argc) { st_from = strtoull(argv[++i], 0, 10); st_to = strtoull(argv[++i], 0, 10); }
         if (!strcmp(argv[i], "--timing") && i + 1 < argc) timing = strcmp(argv[++i], "off") != 0;
@@ -100,7 +101,7 @@ int main(int argc, char **argv)
     while (m.frame < frames) {
         { uint64_t te = cv1k_next_event(&m); s->event_at = te < m.next_vsync ? te : m.next_vsync; if (g_pc_next < s->event_at) s->event_at = g_pc_next; }
         if (s->sleeping) { s->cycles = s->event_at; }
-        else if (interp) sh3_step(s);
+        else if (interp) { if (m.frame >= g_tr0 && m.frame < g_tr1 && g_tr) fprintf(g_tr, "%llu %08X\n", (unsigned long long)s->cycles, s->pc & 0x1FFFFFFFu | (s->pc & 0xE0000000u)); sh3_step(s); }
         else dispatch_step(s);
         if (s->trap) cv1k_take_trap(&m);
         while (s->cycles >= g_pc_next) { g_pc_hist[(s->pc & 0x1FFFFFFFu) >> 8]++; g_pc_total++; g_pc_next += g_pc_step; }

@@ -280,6 +280,20 @@
      New tools: tools/mame/pclog.lua (statistical PC profile; region attribution differs between MAME's
      update-point exits and our dispatch exits, so compare only self-contained code such as handlers),
      run_headless --pc-profile/--ipra0, tools/pc_diff.py; flaglog FLAG_IPRA0=1.
+   - **Instruction traces vs MAME (2026-11-05):** tools/mame/trace.bat + trace_irq.cmd (MAME debugger
+     `trace` with `{tracelog "%d ",totalcycles}` per instruction; note: `gtime 3830` did NOT stop at
+     3.83 s, the trace started at totalcycles 1.47e9 = 14.4 s = attract frame ~863; use a cycle- or
+     frame-based start next time) and `run_headless --interp --trace file f0 f1` (interpreter, same
+     accounting as generated code). Same loop 0x0C08D188 in attract: MAME 120/145/164 cycles per
+     iteration (hit / miss / miss+write-back), ours 120/145/164 -> per-instruction costs match.
+     TUNI1 handler same 44-48-instruction path: MAME 53 cycles when all hits; differences come only
+     from cache state at the interrupt. **Remaining heavy-frame excess (~0.12-0.18 ms with timer IRQs,
+     ~0.025 ms without) = IRQ placement:** MAME takes a pending IRQ at the next update point (every
+     memory-access flush / branch with allow_exception), ours only at backward branches and dispatch
+     boundaries (we saw IRQ2 taken 13,838 cycles late), so handlers interrupt different code and
+     disturb the cache differently. Next: add event checks at MAME's update points in gen_c.py (at
+     least memory-access flushes and forward taken branches), measure the speed cost, then re-run
+     flag_diff / watch_diff.
    Old suspect: MAME's RTC9701 starts at the host's current date/time (ours at 0) and the
    game may read it (RNG seed?) after Start. Check: (a) user runs the same MAME capture twice and we
    compare MAME vs MAME (if they differ, MAME is not deterministic here); (b) count RTC read commands
