@@ -90,7 +90,7 @@ def body_slot(op, pc, in_slot):
     pat, mn, kind, body = ISA[TABLE[op]]
     acct = f'ACC({base_cycles(op)});' + ('' if in_slot or not is_flush(op) else ' FLUSH();')
     if not in_slot and is_checkints(op):
-        acct = f'ACC({base_cycles(op)}); DROP();'
+        acct = f'ACC({base_cycles(op)}); DROP(); s->fpc = PC + 2;'
     return f'{{ const uint32_t PC = hi | 0x{pc:08X}u; (void)PC; SH3_FETCH(0x{op:04X}u, PC); {fields(pat, op)} {body} {acct} }} /* {mn} */'
 
 
@@ -167,7 +167,7 @@ class Gen:
                     elif kind == 'ret':
                         lines.append(f'{{ const uint32_t t = PR; {self.slot(pc + 2)} FLUSH(); s->pc = t; return; }}')
                     elif kind == 'rte':
-                        lines.append(f'{{ const uint32_t t = SPC; set_sr(SSR); {self.slot(pc + 2)} DROP(); s->pc = t; return; }}')   # MAME: RTE sets checkints -> cycles dropped
+                        lines.append(f'{{ const uint32_t t = SPC; set_sr(SSR); {self.slot(pc + 2)} DROP(); s->pc = t; s->fpc = t; return; }}')   # MAME: RTE sets checkints -> cycles dropped
                     elif kind == 'trap':
                         count -= 1
                         lines.append(f'FLUSH(); s->trap = {op & 0xFF} + 1; s->pc = {PCc} + 2; return;')
@@ -191,7 +191,7 @@ void sh3_bad_slot(SH3 *s, uint32_t pc);
 #define ACC(n) (s->acc += (n))
 #define FLUSH() do { if (s->acct) { s->cycles += s->acc; } s->acc = 0; } while (0)
 #define DROP() (s->acc = 0)
-#define SH3_FETCH(op, pc) do { if (s->fetch_hook) s->cycles += s->fetch_hook(s->bus.ctx, (pc), (op)); } while (0)
+#define SH3_FETCH(op, pc) do { if (s->fetch_hook) { if ((pc) == s->pcflush) s->fpc = (pc); s->cycles += s->fetch_hook(s->bus.ctx, s->stale_fetch ? s->fpc : (pc), (op)); } } while (0)
 '''
 
 

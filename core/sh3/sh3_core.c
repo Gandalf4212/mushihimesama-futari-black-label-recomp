@@ -23,9 +23,10 @@ void sh3_set_sr(SH3 *s, uint32_t v)
 void sh3_reset(SH3 *s)
 {
     SH3Bus bus = s->bus; uint32_t (*hook)(void *, uint32_t, uint16_t) = s->fetch_hook; int acct = s->acct;
+    uint32_t pcflush = s->pcflush; int stale = s->stale_fetch;
     memset(s, 0, sizeof *s);
-    s->bus = bus; s->fetch_hook = hook; s->acct = acct;
-    s->pc = 0xA0000000u;
+    s->bus = bus; s->fetch_hook = hook; s->acct = acct; s->pcflush = pcflush; s->stale_fetch = stale;
+    s->pc = s->fpc = 0xA0000000u;
     s->vbr = 0;
     s->sr = 0x700000F0u; /* MD=1, RB=1, BL=1, IMASK=15 (bank already "1": registers start in r[]) */
 }
@@ -80,7 +81,7 @@ void sh3_step(SH3 *s)
     if (!ops_ready) { sh3_init_ops(); ops_ready = 1; }
     uint32_t pc = s->pc;
     uint16_t op = s->bus.fetch16 ? s->bus.fetch16(s->bus.ctx, pc) : RW(pc);
-    if (s->fetch_hook) s->cycles += s->fetch_hook(s->bus.ctx, pc, op);
+    if (s->fetch_hook) { if (pc == s->pcflush) s->fpc = pc; s->cycles += s->fetch_hook(s->bus.ctx, s->stale_fetch ? s->fpc : pc, op); }
     s->next_pc = pc + 2;
     s->has_slot = 0;
     sh3_ops[op](s, op);
@@ -88,7 +89,7 @@ void sh3_step(SH3 *s)
     int cls = s->acct ? sh3_acct_class(op) : 0;
     if (s->acct) {
         s->acc += sh3_base_cycles(op);
-        if ((op & 0xF0FF) == 0x400E || (op & 0xF0FF) == 0x4007) s->acc = 0;   /* ldc Rm,SR / ldc.l @Rm+,SR: MAME checkints drop */
+        if ((op & 0xF0FF) == 0x400E || (op & 0xF0FF) == 0x4007) { s->acc = 0; s->fpc = pc + 2; }   /* ldc Rm,SR / ldc.l @Rm+,SR: MAME checkints drop */
         else if (cls == ACCT_FLUSH) { s->cycles += s->acc; s->acc = 0; }
     }
     else s->cycles++;
@@ -97,7 +98,7 @@ void sh3_step(SH3 *s)
         uint32_t target = s->slot_target;
         s->pc = pc + 2;
         uint16_t op2 = s->bus.fetch16 ? s->bus.fetch16(s->bus.ctx, pc + 2) : RW(pc + 2);
-        if (s->fetch_hook) s->cycles += s->fetch_hook(s->bus.ctx, pc + 2, op2);
+        if (s->fetch_hook) { if (pc + 2 == s->pcflush) s->fpc = pc + 2; s->cycles += s->fetch_hook(s->bus.ctx, s->stale_fetch ? s->fpc : pc + 2, op2); }
         s->has_slot = 0;
         s->next_pc = pc + 4;
         sh3_ops[op2](s, op2);
@@ -105,6 +106,7 @@ void sh3_step(SH3 *s)
         if (s->acct) { s->acc += sh3_base_cycles(op2); if (op == 0x002B) s->acc = 0; else s->cycles += s->acc; s->acc = 0; }   /* taken delayed branch (rte: MAME checkints drop) */
         else s->cycles++;
         s->pc = target;
+        if (op == 0x002B) s->fpc = target;   /* RTE: MAME writes pc = SPC */
     } else {
         if (s->acct && (cls == ACCT_END || (cls == ACCT_COND && s->next_pc != pc + 2))) { s->cycles += s->acc; s->acc = 0; }
         s->pc = s->next_pc;
@@ -118,5 +120,6 @@ void sh3_interrupt(SH3 *s, uint32_t vector_offset, uint32_t unused)
     s->ssr = s->sr;
     sh3_set_sr(s, s->sr | SR_MD | SR_RB | SR_BL);
     s->pc = s->vbr + vector_offset;
+    s->fpc = s->pc;
     s->sleeping = 0;
 }

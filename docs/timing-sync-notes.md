@@ -96,6 +96,28 @@ Result now: total work +0.34 % vs MAME (was +0.89 %); with timer IRQs disabled o
    precise TE time for DMAs that complete while the CPU sleeps, blitter busy start time (MAME starts
    the timer at the exec write).
 
+## 6b. Session 2026-11-06: stale fetch PC (the big one)
+
+* MAME (cv1k `install_speedups` sets SH2DRC_FASTEST_OPTIONS) does not flush PC per instruction, so
+  `sh7709s::drc_update_icache` charges the instruction fetch at a **stale** `m_sh2_state->pc`. That PC is
+  only written at: timeslice ends (out_of_cycles: next pc), exception/IRQ/TRAPA entry (vector), RTE
+  (SPC), checkints after LDC SR / LDC.L SR (pc+2), the pcflush address (idle pc + 2 = 0x0C05176C) and
+  the nocode handler. JMP/JSR/RTS/BRAF/BSRF/BRA/BT/BF do **not** write it (hashjmp via ea / labels).
+  With the debugger on PC is flushed every instruction, which is why the old trace comparisons matched.
+* Modelled: SH3.fpc/pcflush/stale_fetch (sh3.h), SH3_FETCH in gen_c.py and sh3_step charge at fpc;
+  cv1k_timers sets fpc = pc when an event is due. `run_headless --real-fetch` = old model,
+  `--idle-pc 0C05176A` sets the pcflush (no measurable effect on boot), `--slice-us N` adds timeslice
+  ends every N us (mimics a Lua emu.wait poll).
+* Results: boot offset vs watch.txt +11 -> 0/-1 (pre-TMU baseline was -1). Stage1 3000 frames vs
+  watch_stage1.txt (per-frame watchlog): old +13..+17, now -2..-4.
+* **The flaglog references are perturbed**: flaglog's 5 us emu.wait polls end MAME timeslices and
+  refresh the stale PC. Ours vs mame_flags: no slicing -1.36 %, --slice-us 5 -0.25 % (ipra0 -0.24 %),
+  --slice-us 50 -0.69 %. So use watchlog (one poll per frame) as the reference from now on, and
+  compare flaglog only against `--slice-us 5`.
+* Not modelled yet: the idle speedup itself (speedup_r: a read of 0x0C002310 at pc() == idle pc or
+  +2 does spin_until_time(10 us); interrupts do not end the spin). Next: model it, then IRQ
+  acceptance at MAME update points (6.1), which also makes our timeslice ends land where MAME's do.
+
 ## 7. Tools (all in the repo)
 
 | tool | what |

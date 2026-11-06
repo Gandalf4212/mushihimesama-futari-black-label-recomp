@@ -248,6 +248,7 @@ static void tmu_recompute(CV1K *m, int n) { m->tmu[n].next = m->cpu.cycles + ((u
 static void dmac_complete(CV1K *m);
 void cv1k_timers(CV1K *m)
 {
+    if (m->cpu.cycles >= m->cpu.event_at) m->cpu.fpc = m->cpu.pc;   /* timeslice end: MAME's out_of_cycles writes pc */
     dmac_complete(m);
     for (int n = 0; n < 3; n++)
         while (m->tmu[n].running && m->cpu.cycles >= m->tmu[n].next) {
@@ -633,6 +634,7 @@ int cv1k_init(CV1K *m, const char *u4, const char *u2, uint32_t ram_size)
     m->cycles_per_frame = (uint64_t)(CV1K_CPU_HZ / CV1K_FRAME_HZ);
     m->cpu.bus = (SH3Bus){m, bus_rb, bus_rw, bus_rl, bus_wb, bus_ww, bus_wl, bus_fetch};
     tm_init(&m->tm, m->onchip);
+    m->cpu.stale_fetch = 1;
     cv1k_set_timing(m, 1);
     cv1k_reset(m);
     return 1;

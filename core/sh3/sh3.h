@@ -40,6 +40,10 @@ typedef struct SH3 {
     uint32_t (*fetch_hook)(void *ctx, uint32_t pc, uint16_t op);   /* returns fetch penalty */
     int acct;            /* 1 = MAME-DRC base-cycle accounting (pending acc), 0 = 1 cycle per instruction */
     uint32_t acc;   /* generated code returns to the dispatcher once cycles >= event_at */
+    /* MAME DRC quirk (SH2DRC_FASTEST_OPTIONS): the icache charge uses m_sh2_state->pc, which is only written at
+       timeslice exits, exception entry, RTE, checkints (LDC SR) and the driver's pcflush address. fpc mirrors it. */
+    uint32_t fpc, pcflush;
+    int stale_fetch;     /* 1 = charge fetches at fpc (MAME), 0 = at the real PC */
     SH3Bus bus;
 } SH3;
 

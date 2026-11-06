@@ -15,8 +15,10 @@
   NAND; MAME's test menu shows a Free Play option), locate the free-play byte by toggling it in
   MAME's service menu and diffing NAND/RAM, then have the frontend set it (config `freeplay`) and drop
   the coin injection. Keep `--coins` behaviour for coin-op mode.
-* **Sync:** see docs/timing-sync-notes.md (everything tried, numbers, tools, best guesses). Next
-  step there: IRQ acceptance at MAME's update points (gen_c.py), then re-run flag_diff/watch_diff.
+* **Sync (2026-11-06):** found MAME's stale-fetch-PC quirk (docs/timing-sync-notes.md 6b). Stage1 offset
+  vs MAME +13..+17 -> -2..-4 frames; boot +11 -> 0/-1. flaglog refs are perturbed by Lua polling: use
+  watchlog refs. Next: model the idle speedup (10 us spin), then IRQ acceptance at MAME update points.
+* Gamepads P1/P2 confirmed working on test5 (user, 2026-11-06).
 * **Sound next:** compare with MAME `-wavwrite` (same stage1.txt inputs, nvram deleted) against
   `run_headless ... --sound u23 u24 --wav`; pace emulation at 60.018 Hz independent of the display
   (now one emulated frame per vsync: >60 Hz displays run fast and drop audio); volume option.
