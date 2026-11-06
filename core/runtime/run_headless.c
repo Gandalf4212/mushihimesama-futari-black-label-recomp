@@ -110,7 +110,7 @@ int main(int argc, char **argv)
     g_m = &m; blit_ref_init(&g_blit); g_blit.mode_tag = 1; m.blit.on_exec = on_exec;
     static uint32_t fb[320 * 240];
     if (!timing) cv1k_set_timing(&m, 0);
-    if (g_idle_pc) s->pcflush = g_idle_pc + 2;
+    if (g_idle_pc) cv1k_set_idle(&m, g_idle_pc, 0x0C002310u);   /* TODO: ram var from game.json */
     if (g_real_fetch) s->stale_fetch = 0;
     m.next_vsync = m.cycles_per_frame;                                       /* frames count from power-on, like MAME */
     while ((s->pc & 0x1FFFFFFFu) != (entry & 0x1FFFFFFFu)) {                 /* boot on the interpreter */

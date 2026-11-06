@@ -17,7 +17,9 @@
   the coin injection. Keep `--coins` behaviour for coin-op mode.
 * **Sync (2026-11-06):** found MAME's stale-fetch-PC quirk (docs/timing-sync-notes.md 6b). Stage1 offset
   vs MAME +13..+17 -> -2..-4 frames; boot +11 -> 0/-1. flaglog refs are perturbed by Lua polling: use
-  watchlog refs. Next: model the idle speedup (10 us spin), then IRQ acceptance at MAME update points.
+  watchlog refs. Idle speedup (10 us spin) also modelled: boot now a constant +1 frame (no drift),
+  stage1 0 at frame 3000 (+0..+2 during play). Next: the constant +1 at boot, then IRQ acceptance
+  points; wire cv1k_set_idle into the frontend (not yet). Run headless with --idle-pc 0C05176A.
 * Gamepads P1/P2 confirmed working on test5 (user, 2026-11-06).
 * **Sound next:** compare with MAME `-wavwrite` (same stage1.txt inputs, nvram deleted) against
   `run_headless ... --sound u23 u24 --wav`; pace emulation at 60.018 Hz independent of the display

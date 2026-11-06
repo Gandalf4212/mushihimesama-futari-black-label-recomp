@@ -60,6 +60,8 @@ typedef struct CV1K {
     int16_t snd_buf[CV1K_SND_BUF * 2]; uint32_t snd_head, snd_tail;
     uint64_t cycles_per_frame;
     uint64_t next_vsync;
+    uint32_t idle_pc, idle_ram;             /* MAME install_speedups: a read of idle_ram..+7 at pc() == idle_pc(+2) spins 10 us */
+    uint64_t spin_to;                       /* pending spin end (cycles), 0 = none */
     uint64_t *irq_log; uint32_t irq_log_n, irq_log_cap;   /* cycle of each IRQ taken (lockstep replay) */
 } CV1K;
 
@@ -68,6 +70,7 @@ void cv1k_reset(CV1K *m);
 void cv1k_set_timing(CV1K *m, int on);   /* MAME 0.289 cache/bus model on/off */
 /* Take a pending interrupt if allowed. Returns 1 if taken. Call only at dispatch boundaries. */
 int  cv1k_check_irq(CV1K *m);
+void cv1k_set_idle(CV1K *m, uint32_t idle_pc, uint32_t idle_ram);
 /* Signal vsync (IRQ2 assert) and advance the frame counter. */
 void cv1k_vsync(CV1K *m);
 /* TRAPA exception (s->trap set by the instruction): TRA, EXPEVT 0x160, VBR+0x100. */

@@ -248,6 +248,7 @@ static void tmu_recompute(CV1K *m, int n) { m->tmu[n].next = m->cpu.cycles + ((u
 static void dmac_complete(CV1K *m);
 void cv1k_timers(CV1K *m)
 {
+    if (m->spin_to) { if (m->cpu.cycles < m->spin_to) m->cpu.cycles = m->spin_to; m->spin_to = 0; }   /* CPU suspended for the spin */
     if (m->cpu.cycles >= m->cpu.event_at) m->cpu.fpc = m->cpu.pc;   /* timeslice end: MAME's out_of_cycles writes pc */
     dmac_complete(m);
     for (int n = 0; n < 3; n++)
@@ -474,13 +475,18 @@ static uint8_t bus_rb(void *c, uint32_t a)
     CV1K *m = c; TM(m, a, 0); log_reg(m, a); int hit; uint32_t v = port_in(m, P(a), &hit); if (hit) return v;
     uint8_t *q = plain(m, a); return q ? *q : dev_read(m, a, 1);
 }
+/* MAME cv1k speedup_r: pc() is the DRC's stale PC (fpc); spin_until_time(10 us), IRQs wait for the spin */
+#define IDLE_CHECK(m, a) do { if ((m)->idle_pc && (P(a) & ~7u) == ((m)->idle_ram & 0x1FFFFFF8u) && ((m)->cpu.fpc == (m)->idle_pc || (m)->cpu.fpc == (m)->idle_pc + 2)) \
+    { (m)->spin_to = (m)->cpu.cycles + (uint64_t)(CV1K_CPU_HZ / 100000); (m)->cpu.event_at = 0; } } while (0)
+void cv1k_set_idle(CV1K *m, uint32_t idle_pc, uint32_t idle_ram) { m->idle_pc = idle_pc; m->idle_ram = idle_ram; m->cpu.pcflush = idle_pc ? idle_pc + 2 : 0; }
+
 static uint16_t bus_rw(void *c, uint32_t a)
 {
-    CV1K *m = c; TM(m, a, 0); log_reg(m, a); uint8_t *q = plain(m, a); return q ? (uint16_t)(q[0] << 8 | q[1]) : dev_read(m, a, 2);
+    CV1K *m = c; IDLE_CHECK(m, a); TM(m, a, 0); log_reg(m, a); uint8_t *q = plain(m, a); return q ? (uint16_t)(q[0] << 8 | q[1]) : dev_read(m, a, 2);
 }
 static uint32_t bus_rl(void *c, uint32_t a)
 {
-    CV1K *m = c; TM(m, a, 0); log_reg(m, a); uint8_t *q = plain(m, a);
+    CV1K *m = c; IDLE_CHECK(m, a); TM(m, a, 0); log_reg(m, a); uint8_t *q = plain(m, a);
     uint32_t v = q ? (uint32_t)q[0] << 24 | q[1] << 16 | q[2] << 8 | q[3] : dev_read(m, a, 4);
     return TMU_RANGE(a) ? tmu_read32(m, a, v) : v;
 }

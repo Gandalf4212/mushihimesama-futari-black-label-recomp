@@ -114,9 +114,17 @@ Result now: total work +0.34 % vs MAME (was +0.89 %); with timer IRQs disabled o
   refresh the stale PC. Ours vs mame_flags: no slicing -1.36 %, --slice-us 5 -0.25 % (ipra0 -0.24 %),
   --slice-us 50 -0.69 %. So use watchlog (one poll per frame) as the reference from now on, and
   compare flaglog only against `--slice-us 5`.
-* Not modelled yet: the idle speedup itself (speedup_r: a read of 0x0C002310 at pc() == idle pc or
-  +2 does spin_until_time(10 us); interrupts do not end the spin). Next: model it, then IRQ
-  acceptance at MAME update points (6.1), which also makes our timeslice ends land where MAME's do.
+* Idle speedup modelled (cv1k_set_idle; `run_headless --idle-pc 0C05176A`, ram var 0x0C002310 hardcoded
+  in run_headless for now): a 16/32-bit read of idle_ram..+7 while fpc == idle_pc or idle_pc+2 ends
+  the timeslice and jumps cycles +1024 (10 us); IRQs are taken after the spin.
+* Result with stale fetch + idle spin: boot offset vs watch.txt a **constant +1 from the first flip
+  (frame 202 vs 203) to 599**, no drift. Stage1 vs watch_stage1.txt: +0..+2 during play, 0 at 3000; with
+  a 1-frame shift the flip counter 0x0C051040 is identical on 2310/2851 frames (81 %).
+* Left: (a) the constant +1 that already exists at the first flip (boot/power-on, before the main
+  loop; look at the boot interpreter run and when MAME's first vblank lands); (b) the 1-2 frame jitter
+  in gameplay slowdown (IRQ acceptance points 6.1; our timeslice ends are at backward branches and
+  dispatch returns, MAME's at update points); (c) the frontend does not call cv1k_set_idle yet (add
+  GAME_IDLE_PC/GAME_IDLE_RAM to build_frontend.sh's game_config.h and call it in main_sdl.c).
 
 ## 7. Tools (all in the repo)
 
