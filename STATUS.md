@@ -3,7 +3,11 @@
 ## START HERE (handoff 2026-11-05)
 * Milestones: 1, 2, 3, 5, 6, 10 done; 7 (pixel-exact rendering, timing close to MAME) ongoing;
   9 (sound) first cut done; 11 (frontend) playable on Windows with HUD (F10) and sound.
-* Latest Windows build: F:\claude2\fbl\futaribl_windows_test6.zip (2026-11-06): wall-clock pacing at
+* Latest Windows build: F:\claude2\fbl\futaribl_windows_test7.zip (2026-11-06). test6 crackled and slowed
+  down in heavy scenes (user): host overruns from (a) a gen pass without the recorded misses and (b) a
+  linear search in dispatch.c note_miss once its 4096-entry table was full; fixed (hash, 2nd build pass,
+  in-place event service SH3.service). Gameplay host time on the 2-core build box: 12.1 -> 6.3 ms mean.
+  Always run tools/build_game.sh twice before a release build. test6 also had: wall-clock pacing at
   60.024 Hz (config game.frame_rate = mame|pcb, --pcb-rate), video.vsync / --no-vsync, audio.volume /
   --volume, idle speedup wired in, all 2026-11-06 timing fixes. To confirm: smooth on the user's
   display, no audio crackle, volume works. (test5: gamepad-duplication fix, confirmed.) User report on test4: sound great, HUD fine.

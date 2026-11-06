@@ -30,13 +30,17 @@ static void wav_drain(CV1K *m)
     while ((n = cv1k_sound_read(m, buf, 2048)) > 0) { if (g_wav) fwrite(buf, 4, n, g_wav); g_wav_frames += n; }   /* little-endian hosts */
 }
 static const char *g_pc_file; static uint64_t g_pc_first, g_pc_last, g_pc_step, g_pc_next = ~0ull, g_pc_hist[1 << 21], g_pc_total;   /* --pc-profile */
+static FILE *g_ft; static double g_ft_last;   /* --frame-times: host ms per emulated frame */
+static double now_ms(void) { struct timespec t; clock_gettime(CLOCK_MONOTONIC, &t); return t.tv_sec * 1e3 + t.tv_nsec / 1e6; }
 static uint32_t g_idle_pc; static int g_real_fetch; static uint64_t g_slice_cyc, g_slice_next = ~0ull, g_slice_from;
 static int g_ipra0; static FILE *g_tr; static uint64_t g_tr0 = 233, g_tr1 = 236;   /* --ipra0 */
 static FILE *g_chg_log; static uint32_t g_chg_addr, g_chg_prev = 0xFFFFFFFFu;   /* --change-log (tools/mame/flaglog.lua format) */
 static FILE *g_watch_log; static uint32_t g_watch[16]; static int g_nwatch;   /* --watch-log (tools/mame/watchlog.lua format) */
-static void on_exec(void *ctx, uint32_t list) { (void)ctx;
+static double g_blit_ms;
+static double now_ms(void);
+static void on_exec(void *ctx, uint32_t list) { (void)ctx; double t0 = now_ms();
     if (g_kick_log) fprintf(g_kick_log, "%llu %.9f\n", (unsigned long long)g_m->frame, (double)g_m->cpu.cycles / (double)CV1K_CPU_HZ);   /* "<frame> <seconds>" per blitter kick */
-    blit_ref_exec(&g_blit, g_m->ram, g_m->ram_size - 1, list, g_m->blit.clip_x, g_m->blit.clip_y); }
+    blit_ref_exec(&g_blit, g_m->ram, g_m->ram_size - 1, list, g_m->blit.clip_x, g_m->blit.clip_y); g_blit_ms += now_ms() - t0; }
 
 /* Input script (shared with tools/mame/capture.lua): lines "start_frame duration TOKEN...".
  * Tokens: COIN1 COIN2 START1 START2 SERVICE TEST, UP DOWN LEFT RIGHT B1..B4 (P1), P2_UP..P2_B4. */
@@ -92,6 +96,7 @@ int main(int argc, char **argv)
         if (!strcmp(argv[i], "--idle-pc") && i + 1 < argc) g_idle_pc = (uint32_t)strtoul(argv[++i], NULL, 16);   /* MAME speedup idle pc (pcflush = +2) */
         if (!strcmp(argv[i], "--slice-us") && i + 1 < argc) { g_slice_cyc = (uint64_t)(atof(argv[++i]) * CV1K_CPU_HZ / 1e6); if (!g_slice_from) g_slice_next = g_slice_cyc; }   /* extra timeslice ends, like a MAME Lua emu.wait poll */
         if (!strcmp(argv[i], "--slice-from") && i + 1 < argc) { g_slice_from = strtoull(argv[++i], 0, 10); g_slice_next = ~0ull; }   /* start --slice-us at this frame (like flaglog FLAG_FIRST) */
+        if (!strcmp(argv[i], "--frame-times") && i + 1 < argc) g_ft = fopen(argv[++i], "w");
         if (!strcmp(argv[i], "--real-fetch")) g_real_fetch = 1;   /* charge fetches at the real PC (pre-2026-11-06 model) */
         if (!strcmp(argv[i], "--trace") && i + 3 < argc) { g_tr = fopen(argv[++i], "w"); g_tr0 = strtoull(argv[++i], 0, 10); g_tr1 = strtoull(argv[++i], 0, 10); }   /* IPRA = 0 after every vsync from frame 150: no timer IRQs */
         if (!strcmp(argv[i], "--sound") && i + 2 < argc) { if (!cv1k_load_sound(&m, argv[i + 1], argv[i + 2])) fprintf(stderr, "sound ROMs not loaded\n"); i += 2; }   /* u23 u24 */
@@ -127,7 +132,7 @@ int main(int argc, char **argv)
     clock_t t0 = clock();
     uint64_t last_blit = 0, last_nand = 0;
     while (m.frame < frames) {
-        { uint64_t te = cv1k_next_event(&m); s->event_at = te < m.next_vsync ? te : m.next_vsync; if (g_pc_next < s->event_at) s->event_at = g_pc_next; if (g_slice_next < s->event_at) s->event_at = g_slice_next; }
+        { uint64_t te = cv1k_next_event(&m); s->event_at = te < m.next_vsync ? te : m.next_vsync; if (g_pc_next < s->event_at) s->event_at = g_pc_next; if (g_slice_next < s->event_at) s->event_at = g_slice_next; m.tool_event = g_pc_next < g_slice_next ? g_pc_next : g_slice_next; }
         if (s->sleeping) { s->cycles = s->event_at; }
         else if (interp) { if (m.frame >= g_tr0 && m.frame < g_tr1 && g_tr) fprintf(g_tr, "%llu %08X\n", (unsigned long long)s->cycles, s->pc & 0x1FFFFFFFu | (s->pc & 0xE0000000u)); sh3_step(s); }
         else dispatch_step(s);
@@ -138,6 +143,7 @@ int main(int argc, char **argv)
         cv1k_timers(&m);
         if (s->cycles >= m.next_vsync) {
             cv1k_vsync(&m); m.next_vsync = cv1k_vsync_at(m.frame);
+            if (g_ft) { double t = now_ms(); fprintf(g_ft, "%llu %.3f %.3f\n", (unsigned long long)m.frame, t - g_ft_last, g_blit_ms); g_ft_last = t; g_blit_ms = 0; }
             if (g_slice_cyc && g_slice_from && m.frame == g_slice_from) g_slice_next = s->cycles + g_slice_cyc; if (g_nev) apply_inputs(&m);
             if (m.ymz) wav_drain(&m);
             if (g_ipra0 && m.frame >= 150) { m.onchip[0xFEE2] = m.onchip[0xFEE3] = 0; }

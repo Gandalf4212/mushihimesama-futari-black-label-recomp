@@ -23,9 +23,9 @@ void sh3_set_sr(SH3 *s, uint32_t v)
 void sh3_reset(SH3 *s)
 {
     SH3Bus bus = s->bus; uint32_t (*hook)(void *, uint32_t, uint16_t) = s->fetch_hook; int acct = s->acct;
-    uint32_t pcflush = s->pcflush; int stale = s->stale_fetch;
+    uint32_t pcflush = s->pcflush; int stale = s->stale_fetch; int (*svc)(struct SH3 *) = s->service;
     memset(s, 0, sizeof *s);
-    s->bus = bus; s->fetch_hook = hook; s->acct = acct; s->pcflush = pcflush; s->stale_fetch = stale;
+    s->bus = bus; s->fetch_hook = hook; s->acct = acct; s->pcflush = pcflush; s->stale_fetch = stale; s->service = svc;
     s->pc = s->fpc = 0xA0000000u;
     s->vbr = 0;
     s->sr = 0x700000F0u; /* MD=1, RB=1, BL=1, IMASK=15 (bank already "1": registers start in r[]) */

@@ -12,8 +12,9 @@ static uint32_t direct_size;
 uint64_t dispatch_misses, dispatch_calls;
 
 #define RAM_BASE 0x0C000000u
-#define MISS_LOG 4096
+#define MISS_LOG 65536                 /* power of two: open-addressing hash, kept at most half full */
 static uint32_t miss_pc[MISS_LOG]; static uint64_t miss_n[MISS_LOG]; static int miss_used;
+static int32_t miss_slot[MISS_LOG * 2];   /* pc hash -> index+1 into miss_pc, 0 = empty */
 
 void dispatch_init(uint32_t ram_size)
 {
@@ -34,8 +35,13 @@ static recomp_fn lookup(uint32_t pc)
 static void note_miss(uint32_t pc)
 {
     dispatch_misses++;
-    for (int i = 0; i < miss_used; i++) if (miss_pc[i] == pc) { miss_n[i]++; return; }
-    if (miss_used < MISS_LOG) { miss_pc[miss_used] = pc; miss_n[miss_used++] = 1; }
+    uint32_t h = (pc * 2654435761u) >> 15;                 /* 17-bit hash */
+    for (;; h = (h + 1) & (MISS_LOG * 2 - 1)) {
+        int32_t k = miss_slot[h];
+        if (!k) break;
+        if (miss_pc[k - 1] == pc) { miss_n[k - 1]++; return; }
+    }
+    if (miss_used < MISS_LOG) { miss_pc[miss_used] = pc; miss_n[miss_used] = 1; miss_slot[h] = ++miss_used; }
 }
 
 /* Called by generated code when entered at an address it has no label for. */

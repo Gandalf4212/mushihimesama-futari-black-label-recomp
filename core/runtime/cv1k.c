@@ -479,6 +479,19 @@ static uint8_t bus_rb(void *c, uint32_t a)
 /* MAME cv1k speedup_r: pc() is the DRC's stale PC (fpc); spin_until_time(10 us), IRQs wait for the spin */
 #define IDLE_CHECK(m, a) do { if ((m)->idle_pc && (P(a) & ~7u) == ((m)->idle_ram & 0x1FFFFFF8u) && ((m)->cpu.fpc == (m)->idle_pc || (m)->cpu.fpc == (m)->idle_pc + 2)) \
     { (m)->spin_to = (m)->cpu.cycles + (uint64_t)(CV1K_CPU_HZ / 100000); (m)->cpu.event_at = 0; } } while (0)
+int cv1k_service(SH3 *s)
+{
+    CV1K *m = s->bus.ctx;
+    cv1k_timers(m);                                     /* timeslice end (fpc), idle spin, TMU, DMA TE */
+    if (s->cycles >= m->next_vsync || s->cycles >= m->tool_event || s->trap || s->sleeping) return 1;
+    if (cv1k_check_irq(m)) return 1;                    /* SPC = s->pc = resume pc */
+    uint64_t e = cv1k_next_event(m);
+    if (m->next_vsync < e) e = m->next_vsync;
+    if (m->tool_event < e) e = m->tool_event;
+    s->event_at = e;
+    return 0;
+}
+
 uint64_t cv1k_vsync_at(uint64_t k) { return (uint64_t)ceil((CV1K_VBL_FRAC + (double)k) * CV1K_CPU_HZ / CV1K_FRAME_HZ); }
 void cv1k_set_idle(CV1K *m, uint32_t idle_pc, uint32_t idle_ram) { m->idle_pc = idle_pc; m->idle_ram = idle_ram; m->cpu.pcflush = idle_pc ? idle_pc + 2 : 0; }
 
@@ -642,7 +655,7 @@ int cv1k_init(CV1K *m, const char *u4, const char *u2, uint32_t ram_size)
     m->cycles_per_frame = (uint64_t)(CV1K_CPU_HZ / CV1K_FRAME_HZ);
     m->cpu.bus = (SH3Bus){m, bus_rb, bus_rw, bus_rl, bus_wb, bus_ww, bus_wl, bus_fetch};
     tm_init(&m->tm, m->onchip);
-    m->cpu.stale_fetch = 1;
+    m->cpu.stale_fetch = 1; m->cpu.service = cv1k_service; m->tool_event = ~0ull;
     cv1k_set_timing(m, 1);
     cv1k_reset(m);
     return 1;

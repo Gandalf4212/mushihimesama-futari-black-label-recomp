@@ -107,7 +107,7 @@ class Gen:
             if not check:
                 return f'goto L_{tgt:08X};'
             # MAME: every generate_update_cycles allows the out-of-cycles exit (forward and backward)
-            return f'{{ if (s->cycles >= s->event_at) {{ s->pc = hi | 0x{tgt:08X}u; return; }} goto L_{tgt:08X}; }}'
+            return f'{{ if (s->cycles >= s->event_at && SERVICE_AT(hi | 0x{tgt:08X}u)) return; goto L_{tgt:08X}; }}'
         return f'{{ s->pc = hi | 0x{tgt:08X}u; return; }}'
 
     def slot(self, pc):
@@ -192,7 +192,8 @@ void sh3_bad_slot(SH3 *s, uint32_t pc);
 #define ACC(n) (s->acc += (n))
 #define FLUSH() do { if (s->acct) { s->cycles += s->acc; } s->acc = 0; } while (0)
 #define DROP() (s->acc = 0)
-#define UPDATE_POINT(next) do { if (s->cycles >= s->event_at) { s->pc = (next); return; } } while (0)   /* MAME update point: timeslice may end here */
+#define SERVICE_AT(next) (s->pc = (next), s->service ? s->service(s) : 1)
+#define UPDATE_POINT(next) do { if (s->cycles >= s->event_at && SERVICE_AT(next)) return; } while (0)   /* MAME update point: timeslice may end here */
 #define SH3_FETCH(op, pc) do { if (s->fetch_hook) { if ((pc) == s->pcflush) s->fpc = (pc); s->cycles += s->fetch_hook(s->bus.ctx, s->stale_fetch ? s->fpc : (pc), (op)); } } while (0)
 '''
 

@@ -44,6 +44,10 @@ typedef struct SH3 {
        timeslice exits, exception entry, RTE, checkints (LDC SR) and the driver's pcflush address. fpc mirrors it. */
     uint32_t fpc, pcflush;
     int stale_fetch;     /* 1 = charge fetches at fpc (MAME), 0 = at the real PC */
+    /* Called by generated code at a MAME update point once cycles >= event_at, with s->pc = the resume pc.
+       Services timers/IRQs in place; returns 1 if the generated code must return to the dispatcher
+       (IRQ taken: pc = vector; frame end / tool event: pc = resume pc), else 0 and execution continues. */
+    int (*service)(struct SH3 *s);
     SH3Bus bus;
 } SH3;
 
