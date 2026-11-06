@@ -117,7 +117,9 @@ int main(int argc, char **argv)
         { uint64_t te = cv1k_next_event(&m); s->event_at = te < m.next_vsync ? te : m.next_vsync; }
         sh3_step(s);
         cv1k_timers(&m);
-        if (s->cycles >= m.next_vsync) { cv1k_vsync(&m); m.next_vsync += m.cycles_per_frame; }
+        if (s->cycles >= m.next_vsync) { cv1k_vsync(&m); m.next_vsync += m.cycles_per_frame;
+            if (g_watch_log) { fprintf(g_watch_log, "%llu", (unsigned long long)m.frame); for (int w = 0; w < g_nwatch; w++) fprintf(g_watch_log, " %08x", ram32(&m, g_watch[w])); fputc('\n', g_watch_log); }
+            if (dump_dir) { char key[32]; snprintf(key, sizeof key, ",%llu,", (unsigned long long)m.frame); if (strstr(dump_list, key)) { char path[512]; snprintf(path, sizeof path, "%s/ram_%05llu.bin", dump_dir, (unsigned long long)m.frame); FILE *f = fopen(path, "wb"); if (f) { fwrite(m.ram, 1, m.ram_size, f); fclose(f); } } } }
     }
     printf("boot reached main entry at frame %llu (cycle %llu)\n", (unsigned long long)m.frame, (unsigned long long)s->cycles);
     if (!interp) dispatch_init(m.ram_size);
