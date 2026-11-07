@@ -42,9 +42,10 @@ The second build pass is replaced by the shipped hints file (addresses found by 
 - (a) done 2026-11-07 (test26): exe without game code, game.dll with recomp_dll_init (recomp_abi.h),
   callback table for the 6 helpers, ABI/sizeof(SH3)/u4-CRC checks, interpreter fallback. Verified frame
   identical to the static build (wine, 3000 frames of stage1 inputs).
+- (b) done 2026-11-07: core/sh3/recomp.c, byte-identical to discover.py + gen_c.py (tools/check_translator.sh).
+- (c) done 2026-11-07: games/futaribl/hints.txt (addresses only).
 
 ## Open questions (next session)
-- Translator size: discover.py 178 + gen_c.py 234 + isa.py 222 lines -> a C port (into the exe) is small; preferred over embedding Python.
 - w64devkit size after trimming (gcc, ld, as, headers only) and its licence notices to ship.
 - Rebuild trigger: new release with a changed translator -> ABI/version bump -> rebuild prompt.
 - Linux later: same flow with the system compiler.

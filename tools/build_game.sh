@@ -11,9 +11,12 @@ RAMSZ=$(python3 -c "import json;print(int(json.load(open('$G/game.json'))['ram_s
 ENTRY=$(python3 -c "import json;print(json.load(open('$G/game.json'))['boot']['main_entry'][2:])")
 make -s
 ./build/boot_runner "$ROMS/$U4" "$RAMSZ" "$ENTRY" "$B/ram.bin" | head -1
-EXTRA=""; [ -f "$B/misses.txt" ] && EXTRA="--extra $B/misses.txt"
-python3 -I core/sh3/discover.py "$B/ram.bin" "$G/game.json" "$B/discovery.json" $EXTRA
-python3 -I core/sh3/gen_c.py "$B/ram.bin" "$B/discovery.json" "$B/gen"
+# translator: core/sh3/recomp.c (the C port of discover.py + gen_c.py; tools/check_translator.sh diffs them)
+cat "$G/hints.txt" "$B/misses.txt" 2>/dev/null > "$B/hints_all.txt" || true
+VEC=$(python3 -c "import json;v=json.load(open('$G/game.json'))['boot'].get('vector_table');print(f\"--vectors {v['addr'][2:]} {v['size'][2:]}\" if v else '')")
+VBR=$(python3 -c "import json;print(json.load(open('$G/game.json'))['boot']['vbr'][2:])")
+rm -rf "$B/gen"; mkdir -p "$B/gen"
+./build/recomp "$B/ram.bin" "$B/gen" --entry "$ENTRY" --vbr "$VBR" $VEC --extra "$B/hints_all.txt"
 ls "$B"/gen/*.c | xargs -P"$(nproc)" -I{} cc -O1 -w -Icore/sh3 -c {} -o {}.o
 cc -O2 -w -Ibuild -o "$B/lockstep_test" core/runtime/lockstep_test.c core/runtime/dispatch.c core/sh3/sh3_core.c "$B"/gen/*.c.o
 "./$B/lockstep_test" "$ROMS/$U4" "$RAMSZ" "$ENTRY" "$CYC" | head -6

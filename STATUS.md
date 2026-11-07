@@ -40,8 +40,16 @@
   inputs, 3000 frames: per-frame watch log and PNGs at 1000/2000/3000 identical. Packaging:
   `tools/package_release.sh <set> out.zip --with-game-code` adds game.dll (private test builds only);
   without the flag the zip has none of Cave's code. build_frontend.sh skips up-to-date gen objects
-  (relink ~20 s). **To confirm: test26 plays as test25 (speed, no warning box).**
-  Next: step (b), port discover.py + gen_c.py + isa.py to C, output byte-identical.
+  (relink ~20 s). **User-confirmed 2026-11-07** (plays as test25; ROM import works).
+* **Builder steps (b) + (c) done 2026-11-07 (no user test needed: build-side only).** core/sh3/recomp.c (+ .h):
+  C port of discover.py + gen_c.py, same work order and literal heuristics; instruction table from isa.py
+  via core/sh3/gen_isa_c.py -> build/isa_table.inc (make build/recomp). Output byte-identical to Python
+  with and without hints (45 / 35 files), 0.6 s vs 5.8 s. `tools/check_translator.sh <set>` re-checks it
+  (run after any isa.py / gen_c.py / recomp.c change). Hints: games/futaribl/hints.txt (1462 runtime-miss
+  addresses, addresses only); build_game.sh now uses build/recomp with hints.txt + build misses.txt.
+  Python discover/gen_c stay as the reference.
+  Next: (e) first-run build in the exe: boot_runner -> recomp_translate -> gcc (bundled) -> assets/game.dll,
+  with the "building" screen; then (d) trim w64devkit + licence notices.
 
 ### Next, in order (target v0.8.0)
 1. **Builder (the v0.8.0 blocker)**: the public release must not contain Cave's code. Plan in
