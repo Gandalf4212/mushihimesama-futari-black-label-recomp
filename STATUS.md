@@ -16,6 +16,12 @@
   Cause: core/frontend/input.c opened the same controller twice (explicit open at startup + SDL's
   CONTROLLERDEVICEADDED for already-connected pads), so one pad drove both players' inputs incl.
   Start, and free play coined + started both. Now an already-open pad is ignored.
+* **Release candidate 1 (2026-11-06): F:\claude2\fbl\futaribl_windows_rc1.zip.** Clean tools/build_frontend.sh run
+  (SDL3, shaders, all sources) OK. Packaged by tools/package_release.sh: exe, SDL3.dll, README.txt (ours,
+  games/futaribl/README.txt: controls, settings, ROM import, bezel packs incl. the LaunchBox "Cave Shoot
+  Part 1" pack: default.lay, vert_screen_bezel.png, vert_screen_mask.png, 04.png -> art1.png), LICENSE.
+  Debug --shot/--shot-menu removed from the frontend; core tool hooks (tool_event, dispatch_report, miss
+  log) kept for run_headless / sync work. To confirm: pads after a ROM import.
 * **Free play decision (2026-11-06, user):** the CV1000 board has no free-play setting, so the frontend's coin
   trick (input.c) stays. The "free play from the game's own setting" item is dropped.
 * **test16 (2026-11-06):** check screen now opens gamepads (A/B work) and closes them + SDL_QuitSubSystem(GAMEPAD)
@@ -79,7 +85,7 @@
   (mame 60.024 / pcb 60.018 / display = one frame per refresh on a ~60 Hz display, like MAME
   -syncrefresh; new config value frame_rate = "display", --sync-display), slowdown, free play, volume,
   rotate controls, HUD, resume, quit. Not yet: reset game (needs a cv1k teardown), key/pad remapping,
-  video scaling filters/shaders (SDL3 step). Debug: --shot N file --shot-menu.
+  video scaling filters/shaders (SDL3 step). (The --shot debug option was removed for the release.)
 * **Free play redesign (user request):** today free play is a frontend trick (a Start press inserts a
   coin for 4 frames, then presses Start; input.c). Wanted: use the game's own FREE PLAY setting
   instead. Plan: find the settings block in NAND/EEPROM (the game keeps settings + high scores in

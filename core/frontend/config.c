@@ -89,8 +89,7 @@ int config_args(Config *c, int argc, char **argv)
         else if (!strcmp(a, "--artwork") && i + 1 < argc) snprintf(c->artwork, sizeof c->artwork, "%s", argv[++i]);
         else if (!strcmp(a, "--shader") && i + 1 < argc) { const char *v = argv[++i]; c->shader = !strcmp(v, "none") ? SHADER_NONE : !strcmp(v, "crt") ? SHADER_CRT : !strcmp(v, "crt-curved") ? SHADER_CURVED : SHADER_SHARP; }
         else if (!strcmp(a, "--volume") && i + 1 < argc) { c->volume = atoi(argv[++i]); if (c->volume < 0) c->volume = 0; if (c->volume > 100) c->volume = 100; }
-        else if (!strcmp(a, "--config") || !strcmp(a, "--shot")) i += !strcmp(a, "--shot") ? 2 : 1;   /* handled elsewhere */
-        else if (!strcmp(a, "--shot-menu")) ;
+        else if (!strcmp(a, "--config")) i++;   /* handled in main */
         else if (!strcmp(a, "--set") && i + 1 < argc) {        /* --set section.key=value */
             char buf[256]; snprintf(buf, sizeof buf, "%s", argv[++i]);
             char *dot = strchr(buf, '.'), *eq = strchr(buf, '=');

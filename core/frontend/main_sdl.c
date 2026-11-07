@@ -2,7 +2,8 @@
  * Usage:
  *   <exe> --setup <rom_dir>     one-time: copy the needed ROM data into ./assets (ROM not needed after)
  *   <exe> [--yoko | --tate-cw | --tate-ccw] [--scale N] [--fullscreen] [--no-slowdown] [--rotate-controls]
- *         [--volume 0-100] [--no-vsync] [--no-sound] [--coins] [--hud]
+ *         [--volume 0-100] [--no-vsync] [--sync-display] [--no-sound] [--coins] [--hud] [--uncapped]
+ *         [--integer] [--shader none|sharp|crt|crt-curved] [--no-bezel] [--artwork file.lay|png|jpg] [--config file]
  * Keys: arrows move, Z X C V = buttons 1-4, 5 coin, 1 start, 2 P2 start, 6 coin 2, F2 test, 9 service,
  *       F1 settings menu, F10 performance HUD, F11 fullscreen, Esc quit. Gamepad Guide = menu. Gamepad: d-pad/left stick, A B X Y = buttons 1-4, Back coin, Start start.
  * GPL-2.0-or-later. */
@@ -96,13 +97,11 @@ static void fit_window_pixels(SDL_Window *win, int ww, int wh)
 
 int main(int argc, char **argv)
 {
-    long shot_frame = -1; const char *shot_path = NULL; const char *cfg_path = "config.toml"; int no_sound = 0, shot_menu = 0;
+    const char *cfg_path = "config.toml"; int no_sound = 0;
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "--setup") && i + 1 < argc) return setup(argv[i + 1]);
         if (!strcmp(argv[i], "--config") && i + 1 < argc) cfg_path = argv[i + 1];
         if (!strcmp(argv[i], "--no-sound")) no_sound = 1;
-        if (!strcmp(argv[i], "--shot") && i + 2 < argc) { shot_frame = atol(argv[i + 1]); shot_path = argv[i + 2]; }   /* debug */
-        if (!strcmp(argv[i], "--shot-menu")) shot_menu = 1;   /* debug: open the menu before the shot */
     }
     rom_chdir_base();                            /* work next to the program, wherever it was started from */
     Config cfg; config_defaults(&cfg);
@@ -242,12 +241,6 @@ int main(int argc, char **argv)
         hud.note = cfg.uncapped ? "UNCAPPED" : NULL;
         if (show_hud) hud_draw(&hud, ren, ow, oh);
         if (menu.open) menu_draw(&menu, &cfg, show_hud, ren, ow, oh);
-        if ((long)g_m.frame >= shot_frame && shot_frame >= 0 && shot_menu && !menu.open) { menu.open = 1; menu.sel = 4; }
-        else if ((long)g_m.frame >= shot_frame && shot_frame >= 0) {
-            SDL_Surface *sf = SDL_RenderReadPixels(ren, NULL);
-            if (sf) { SDL_SaveBMP(sf, shot_path); SDL_DestroySurface(sf); }
-            running = 0;
-        }
         SDL_RenderPresent(ren);
         uint64_t t_end = SDL_GetPerformanceCounter();
         hud_frame(&hud, ran, ran ? t_emu : 0, t_end - t_pres, t_end);
