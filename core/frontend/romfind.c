@@ -372,6 +372,8 @@ static int check_screen(const char *dir)
     return res == 1;
 }
 
+static int assets_ready(void) { return exists("assets/program.bin") && exists("assets/nand.bin"); }
+
 static int ends_with(const char *s, const char *e) { size_t a = strlen(s), b = strlen(e); return a >= b && !SDL_strcasecmp(s + a - b, e); }
 
 /* archive -> TMPDIR -> setup; extracted copies are removed afterwards */
@@ -422,6 +424,7 @@ int rom_setup(int (*setup)(const char *romdir))
     for (int i = 0; i < 2 && !g_quit; i++) { snprintf(p, sizeof p, "%s/%s", dirs[i], GAME_U4); if (exists(p) && check_screen(dirs[i]) && setup(dirs[i]) == 0) return 0; }
     for (int i = 0; i < 4 && !g_quit; i++) if (from_archive(arcs[i], setup)) return 0;
     if (g_quit) return 1;
+    if (assets_ready()) return 0;                 /* an import above already built assets/: never ask again */
 
     const char *msg = "The " GAME_SET " ROM set was not found.\n\nPut " GAME_SET ".zip, " GAME_SET ".7z or a folder named \""
                       GAME_SET "\" next to this program,\nor pick a ROM archive (Zip / 7z...) or folder (Folder...) now.\nIt is only needed once: the game keeps what it needs in assets\\.";
@@ -441,7 +444,7 @@ int rom_setup(int (*setup)(const char *romdir))
         rom_chdir_base();                                               /* the dialog may change the working folder */
         if (!k.path[0]) continue;                                       /* cancelled */
         logf_("picked %s", k.path);
-        if (from_path(k.path, setup)) return 0;
+        if (from_path(k.path, setup) || assets_ready()) return 0;
         if (g_quit) return 1;
         msg = "That did not contain the " GAME_SET " ROMs (" GAME_U4 ", " GAME_U2 ").\n\n"
               "Choose " GAME_SET ".zip / .7z or the folder holding the ROM files.";

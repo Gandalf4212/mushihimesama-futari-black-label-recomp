@@ -15,6 +15,13 @@
   user's (LaunchBox "Cave Shoot Part 1": copy default.lay, vert_screen_bezel.png, vert_screen_mask.png,
   04.png -> art1.png into Bezel\); SDL3 GPU = Vulkan only.
 
+* **test24 (2026-11-06, late):** user: with the ROMs (zip, 7z or folder) next to the exe, the import built
+  assets/ and then the "ROM set was not found" dialog still appeared. Root cause not found by reading
+  romfind.c (every success path returns 0); added a guard: assets_ready() (program.bin + nand.bin) is
+  checked before the dialog and after a pick. **To do: confirm on test24; if the dialog still shows,
+  find the real cause** (suspects: check_screen() returning 0 on the keypress that closed it, or
+  setup() failing after creating assets/).
+
 ### Next, in order (target v0.8.0)
 1. **Builder (the v0.8.0 blocker)**: the public release must not contain Cave's code. Plan in
    docs/builder-plan.md: futaribl.exe = launcher + runtime + frontend (ours); game code compiled on the
