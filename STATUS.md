@@ -20,6 +20,12 @@
   (2) the **builder**: rc1's exe contains the recompiled game code (Cave's program in translated form),
   so it must not be released publicly. Ship our runtime + toolchain and compile the game on the player's
   PC from their ROMs. Plan: docs/builder-plan.md. rc1 stays a private test build.
+* **test19 (2026-11-06):** test18's PAD rows (bottom of the list) were not found by the user and action rows
+  ignored pads. Now each action row takes a key or a pad button (button rows; pad mapping shared by both
+  pads, clashes swap), Del clears keys, X clears the pad button; menu box 56 chars wide.
+* **Requested: optional gamepad rumble when the player is hit** (config + menu toggle, SDL_RumbleGamepad
+  on that player's pad). Needs the per-player lives (or death flag) RAM address: find it by a RAM diff
+  around a death (run_headless with an input file that dies, or a MAME cheat/watch), then check per frame.
 * **test18 (2026-11-06): control remapping.** config.h bindings: key[ACT_COUNT][2] (P1/P2 up..coin, service,
   test; SDL scancode names in config.toml [input], e.g. p1_b1 = "Left Ctrl, Z") and pad[PAD_COUNT]
   (B1-B4, start, coin for both pads; SDL gamepad button names; directions fixed d-pad + left stick).

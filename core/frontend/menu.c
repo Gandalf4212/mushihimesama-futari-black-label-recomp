@@ -69,33 +69,44 @@ static int change(Menu *m, Config *c, int *show_hud, int dir)
 
 static int move(Menu *m, int d) { m->sel = (m->sel + I_COUNT + d) % I_COUNT; return 0; }
 
-/* ---------------- CONTROLS page ---------------- */
-enum { C_PAD0 = ACT_COUNT, C_RESET = ACT_COUNT + PAD_COUNT, C_BACK, C_ROWS };
+/* ---------------- CONTROLS page ----------------
+ * One row per action. While a row waits for input, a key binds a key (up to two per action) and a pad
+ * button binds the pad (button rows only; both pads share the pad mapping, directions are always
+ * d-pad + left stick). Delete clears a row's keys, X (pad) clears its pad button. */
+enum { C_RESET = ACT_COUNT, C_BACK, C_ROWS };
+
+static int pad_slot(int r)               /* action row -> pad mapping index, -1 if the pad is fixed / none */
+{
+    if (r >= 2 * ACT_PER_PLAYER) return -1;
+    switch (r % ACT_PER_PLAYER) {
+    case ACT_B1: return PAD_B1; case ACT_B2: return PAD_B2; case ACT_B3: return PAD_B3; case ACT_B4: return PAD_B4;
+    case ACT_START: return PAD_START; case ACT_COIN: return PAD_COIN;
+    }
+    return -1;
+}
 
 static void crow_label(int r, char *out, size_t n)
 {
     static const char *act[ACT_PER_PLAYER] = { "UP", "DOWN", "LEFT", "RIGHT", "BUTTON 1", "BUTTON 2", "BUTTON 3", "BUTTON 4", "START", "COIN" };
-    static const char *pad[PAD_COUNT] = { "PAD BUTTON 1", "PAD BUTTON 2", "PAD BUTTON 3", "PAD BUTTON 4", "PAD START", "PAD COIN" };
     if (r < 2 * ACT_PER_PLAYER) snprintf(out, n, "P%d %s", r / ACT_PER_PLAYER + 1, act[r % ACT_PER_PLAYER]);
     else if (r == ACT_SERVICE) snprintf(out, n, "SERVICE");
     else if (r == ACT_TEST) snprintf(out, n, "TEST");
-    else if (r < C_RESET) snprintf(out, n, "%s", pad[r - C_PAD0]);
     else snprintf(out, n, r == C_RESET ? "RESET TO DEFAULTS" : "BACK");
 }
 
 static void crow_value(const Config *c, int r, char *out, size_t n)
 {
     out[0] = 0;
-    if (r < ACT_COUNT) {
-        const char *a = c->key[r][0] ? SDL_GetScancodeName((SDL_Scancode)c->key[r][0]) : "";
-        const char *b = c->key[r][1] ? SDL_GetScancodeName((SDL_Scancode)c->key[r][1]) : "";
-        snprintf(out, n, "%s%s%s", a, *a && *b ? " / " : "", *a || *b ? b : "-");
-    } else if (r < C_RESET) {
-        int p = c->pad[r - C_PAD0];
-        const char *s = p >= 0 ? SDL_GetGamepadStringForButton((SDL_GamepadButton)p) : NULL;
-        snprintf(out, n, "%s", s ? s : "-");
-    }
-    if (strlen(out) > 18) out[18] = 0;
+    if (r >= ACT_COUNT) return;
+    const char *a = c->key[r][0] ? SDL_GetScancodeName((SDL_Scancode)c->key[r][0]) : "";
+    const char *b = c->key[r][1] ? SDL_GetScancodeName((SDL_Scancode)c->key[r][1]) : "";
+    char pad[24] = "";
+    int ps = pad_slot(r);
+    if (ps >= 0) {
+        const char *p = c->pad[ps] >= 0 ? SDL_GetGamepadStringForButton((SDL_GamepadButton)c->pad[ps]) : NULL;
+        snprintf(pad, sizeof pad, " | PAD %s", p ? p : "-");
+    } else if (r < 2 * ACT_PER_PLAYER) snprintf(pad, sizeof pad, " | PAD DPAD");
+    snprintf(out, n, "%s%s%s%s", a, *a && *b ? " / " : "", *a || *b ? b : "-", pad);
 }
 
 static int controls_event(Menu *m, Config *c, const SDL_Event *e)
@@ -105,23 +116,27 @@ static int controls_event(Menu *m, Config *c, const SDL_Event *e)
         if (e->type == SDL_EVENT_KEY_DOWN && !e->key.repeat) {
             SDL_Scancode sc = e->key.scancode;
             if (sc == SDL_SCANCODE_ESCAPE) { m->capture = 0; return 0; }
-            if (r >= ACT_COUNT || sc == SDL_SCANCODE_F1 || sc == SDL_SCANCODE_F10 || sc == SDL_SCANCODE_F11) return 0;   /* reserved */
+            if (sc == SDL_SCANCODE_F1 || sc == SDL_SCANCODE_F10 || sc == SDL_SCANCODE_F11) return 0;   /* reserved */
             if (c->key[r][0] != (int)sc) { c->key[r][1] = c->key[r][0]; c->key[r][0] = sc; }   /* newest first, keep one more */
             if (c->key[r][1] == (int)sc) c->key[r][1] = 0;
             m->capture = 0; m->dirty = 1;
-        } else if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
-            if (r >= C_PAD0 && r < C_RESET && e->gbutton.button != SDL_GAMEPAD_BUTTON_GUIDE) { c->pad[r - C_PAD0] = e->gbutton.button; m->capture = 0; m->dirty = 1; }
-            else if (r < ACT_COUNT && e->gbutton.button == SDL_GAMEPAD_BUTTON_EAST) m->capture = 0;
+        } else if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e->gbutton.button != SDL_GAMEPAD_BUTTON_GUIDE) {
+            int ps = pad_slot(r), b = e->gbutton.button;
+            if (ps >= 0) {
+                for (int j = 0; j < PAD_COUNT; j++) if (j != ps && c->pad[j] == b) c->pad[j] = c->pad[ps];   /* swap a clash */
+                c->pad[ps] = b; m->dirty = 1;
+            }
+            m->capture = 0;                    /* direction / cabinet rows: a pad press just cancels */
         }
         return 0;
     }
-    int act = 0, mv = 0, clr = 0, back = 0;
+    int act = 0, mv = 0, clr_keys = 0, clr_pad = 0, back = 0;
     if (e->type == SDL_EVENT_KEY_DOWN) {
         switch (e->key.key) {
         case SDLK_UP: mv = -1; break;
         case SDLK_DOWN: mv = 1; break;
         case SDLK_RETURN: case SDLK_KP_ENTER: case SDLK_SPACE: if (!e->key.repeat) act = 1; break;
-        case SDLK_DELETE: case SDLK_BACKSPACE: clr = 1; break;
+        case SDLK_DELETE: case SDLK_BACKSPACE: clr_keys = 1; break;
         case SDLK_ESCAPE: if (!e->key.repeat) back = 1; break;
         case SDLK_F1: if (!e->key.repeat) { m->page = 0; m->open = 0; return MENU_CH_CLOSED; } break;
         }
@@ -130,7 +145,7 @@ static int controls_event(Menu *m, Config *c, const SDL_Event *e)
         case SDL_GAMEPAD_BUTTON_DPAD_UP: mv = -1; break;
         case SDL_GAMEPAD_BUTTON_DPAD_DOWN: mv = 1; break;
         case SDL_GAMEPAD_BUTTON_SOUTH: act = 1; break;
-        case SDL_GAMEPAD_BUTTON_WEST: clr = 1; break;
+        case SDL_GAMEPAD_BUTTON_WEST: clr_pad = 1; break;
         case SDL_GAMEPAD_BUTTON_EAST: back = 1; break;
         case SDL_GAMEPAD_BUTTON_GUIDE: m->page = 0; m->open = 0; return MENU_CH_CLOSED;
         }
@@ -143,10 +158,10 @@ static int controls_event(Menu *m, Config *c, const SDL_Event *e)
     }
     if (mv) m->csel = (m->csel + C_ROWS + mv) % C_ROWS;
     if (back) { m->page = 0; m->capture = 0; }
-    if (clr && r < ACT_COUNT) { c->key[r][0] = c->key[r][1] = 0; m->dirty = 1; }
-    if (clr && r >= C_PAD0 && r < C_RESET) { c->pad[r - C_PAD0] = -1; m->dirty = 1; }
+    if (clr_keys && r < ACT_COUNT) { c->key[r][0] = c->key[r][1] = 0; m->dirty = 1; }
+    if (clr_pad && pad_slot(r) >= 0) { c->pad[pad_slot(r)] = -1; m->dirty = 1; }
     if (act) {
-        if (r < C_RESET) m->capture = 1;
+        if (r < ACT_COUNT) m->capture = 1;
         else if (r == C_RESET) { config_default_controls(c); m->dirty = 1; }
         else m->page = 0;
     }
@@ -166,14 +181,15 @@ static void controls_draw(const Menu *m, const Config *c, SDL_Renderer *r, int p
             SDL_SetRenderDrawColor(r, m->capture ? 170 : 60, m->capture ? 110 : 90, m->capture ? 40 : 160, 255);
             SDL_FRect hl = {x0 + cw, y - px * 2, w - 2 * cw, lh}; SDL_RenderFillRect(r, &hl);
         }
-        char l[32], v[40]; crow_label(i, l, sizeof l);
+        char l[32], v[64]; crow_label(i, l, sizeof l);
         SDL_SetRenderDrawColor(r, 255, 255, 255, 255); hud_text(r, x0 + cw * 2, y, px, l);
-        if (i == m->csel && m->capture) snprintf(v, sizeof v, i < ACT_COUNT ? "PRESS A KEY" : "PRESS A BUTTON");
+        if (i == m->csel && m->capture) snprintf(v, sizeof v, pad_slot(i) >= 0 ? "PRESS A KEY OR PAD BUTTON" : "PRESS A KEY");
         else crow_value(c, i, v, sizeof v);
-        SDL_SetRenderDrawColor(r, 255, 220, 120, 255); hud_text(r, x0 + cw * 21, y, px, v);
+        if (strlen(v) > 30) v[30] = 0;
+        SDL_SetRenderDrawColor(r, 255, 220, 120, 255); hud_text(r, x0 + cw * 14, y, px, v);
     }
     SDL_SetRenderDrawColor(r, 150, 150, 150, 255);
-    hud_text(r, x0 + cw * 2, y0 + h - lh, px, m->capture ? "ESC CANCELS" : "ENTER/A SET  DEL/X CLEAR  ESC/B BACK");
+    hud_text(r, x0 + cw * 2, y0 + h - lh, px, m->capture ? "ESC CANCELS" : "ENTER/A SET  DEL CLEAR KEYS  X CLEAR PAD  ESC/B BACK");
 }
 
 int menu_event(Menu *m, Config *c, int *show_hud, const SDL_Event *e)
@@ -226,7 +242,7 @@ int menu_event(Menu *m, Config *c, int *show_hud, const SDL_Event *e)
 void menu_draw(const Menu *m, const Config *c, int show_hud, SDL_Renderer *r, int out_w, int out_h)
 {
     int px = out_h >= 900 ? 3 : 2, lh = 11 * px, cw = 6 * px;
-    int w = 40 * cw, h = (I_COUNT + 4) * lh;
+    int w = 56 * cw, h = (I_COUNT + 4) * lh;
     int x0 = (out_w - w) / 2, y0 = (out_h - h) / 2;
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(r, 0, 0, 0, 210);
