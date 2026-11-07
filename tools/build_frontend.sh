@@ -13,6 +13,8 @@ print(f'#define GAME_RAM_SIZE {int(g["ram_size"], 16)}u\n#define GAME_MAIN_ENTRY
 print(f'#define GAME_U4 "{f["maincpu"]}"\n#define GAME_U2 "{f["nand"]}"')
 u4 = [x for reg in r['regions'] if reg['region'] == 'maincpu' for x in reg['files']][0]
 print(f'#define GAME_U4_CRC 0x{u4["crc32"]}u')
+b = g['boot']; vt = b.get('vector_table') or {'addr': '0', 'size': '0'}
+print(f'#define GAME_VBR {b["vbr"]}u\n#define GAME_VEC_ADDR {vt["addr"]}u\n#define GAME_VEC_SIZE {vt["size"]}u')
 if 'lives' in g: print(f'#define GAME_LIVES_P1 {g["lives"]["p1"]}u\n#define GAME_LIVES_P2 {g["lives"]["p2"]}u')
 if 'credits' in g: print(f'#define GAME_CREDITS {g["credits"]["addr"]}u')
 if 'idle' in g: print(f'#define GAME_IDLE_PC {g["idle"]["pc"]}u\n#define GAME_IDLE_RAM {g["idle"]["ram_var"]}u')
@@ -31,10 +33,15 @@ for p in sorted(glob.glob(sys.argv[1] + '/*_frag.spv')):
     print(f'static const size_t {n}_spv_len = {len(d)};')
 PY
 CXXSRC="core/sound/ymz770.cpp core/sound/mpeg_audio.cpp"
-SRC="core/frontend/main_sdl.c core/frontend/present.c core/frontend/layout.c core/frontend/image.c core/frontend/romfind.c core/frontend/config.c core/frontend/input.c core/frontend/hud.c core/frontend/menu.c core/frontend/gamedll.c core/runtime/cv1k.c core/runtime/timing.c core/runtime/dispatch.c core/render/blit_ref.c core/sh3/sh3_core.c"
+SRC="core/frontend/main_sdl.c core/frontend/present.c core/frontend/layout.c core/frontend/image.c core/frontend/romfind.c core/frontend/config.c core/frontend/input.c core/frontend/hud.c core/frontend/menu.c core/frontend/gamedll.c core/frontend/builder.c core/sh3/recomp.c core/runtime/cv1k.c core/runtime/timing.c core/runtime/dispatch.c core/render/blit_ref.c core/sh3/sh3_core.c"
 if [ "$TARGET" = windows ]; then
   CC=x86_64-w64-mingw32-gcc
   mkdir -p "$OUT/obj"
+  make -s build/isa_table.inc
+  # what the first-run builder needs next to the exe (ours): runtime headers + glue, translator hints
+  rm -rf "$OUT/recomp"; mkdir -p "$OUT/recomp/sh3" "$OUT/recomp/runtime"
+  cp core/sh3/sh3.h core/sh3/sh3_ops.h "$OUT/recomp/sh3/"; cp core/runtime/recomp_abi.h core/runtime/recomp_dll.c "$OUT/recomp/runtime/"
+  cp "$G/hints.txt" "$OUT/recomp/hints.txt"
   # game code -> game.dll (the exe has none of it; the player's PC builds assets/game.dll, see docs/builder-plan.md)
   mkdir -p "$OUT/gen"; rm -f "$OUT"/obj/recomp_*.o   # (older builds linked the game code into the exe)
   ls "$B"/gen/*.c | xargs -P"$(nproc)" -I{} sh -c "o=$OUT/gen/\$(basename {}).o; [ \$o -nt {} ] || $CC -O1 -w -Icore/sh3 -c {} -o \$o"   # skip up-to-date objects

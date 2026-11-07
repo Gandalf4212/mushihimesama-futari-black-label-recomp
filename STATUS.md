@@ -3,7 +3,7 @@
 ## START HERE (handoff 2026-11-07)
 
 ### Where we are
-* Latest test build: **F:\claude2\fbl\futaribl_windows_test26.zip** (private: it contains the recompiled game
+* Latest test build: **F:\claude2\fbl\futaribl_windows_test27.zip** (no game code: the first public-safe build;: it contains the recompiled game
   code, see "Builder"). User-confirmed working on Windows: SDL3 frontend, Vulkan shaders (none / sharp /
   crt / crt-curved), our Yoko bezel + MAME .lay artwork packs, fit / integer scaling, uncapped benchmark
   HUD, first-run ROM import (folder / zip / 7z / picker) with the CRC check screen, key + pad remapping
@@ -48,8 +48,23 @@
   (run after any isa.py / gen_c.py / recomp.c change). Hints: games/futaribl/hints.txt (1462 runtime-miss
   addresses, addresses only); build_game.sh now uses build/recomp with hints.txt + build misses.txt.
   Python discover/gen_c stay as the reference.
-  Next: (e) first-run build in the exe: boot_runner -> recomp_translate -> gcc (bundled) -> assets/game.dll,
-  with the "building" screen; then (d) trim w64devkit + licence notices.
+* **Builder steps (d) + (e) (2026-11-07, test27, to confirm).** core/frontend/builder.c: when game.dll is
+  missing/outdated and toolchain/ + recomp/ are next to the exe, main_sdl runs game_build(): boot
+  (boot_run_image in boot_runner.c, 0.4 s) -> recomp_translate into assets/_build -> parallel gcc
+  (CreateProcess, CREATE_NO_WINDOW, below-normal priority; jobs = min(cores, (RAM MB-2048)/1800), the biggest
+  file needs ~1.8 GB in cc1) -> link assets/game.dll -> delete _build. Progress screen in the ROM-check style
+  (headless if no window). Log: assets/build.log (kept _build on failure). Release layout: exe, SDL3.dll,
+  recomp/ (sh3.h, sh3_ops.h, recomp_abi.h, recomp_dll.c, hints.txt), toolchain/ (trimmed w64devkit 2.9.1 =
+  GCC 16.2.0: tools/trim_toolchain.sh <unpacked kit> ../deps/toolchain <COPYING3>; 59 MB, 24 MB zipped;
+  whitelist from gcc -M / ld -t; gcc found via -Btoolchain/bin/). Licences in toolchain/: COPYING3.txt (GPLv3,
+  GCC/binutils), COPYING.MinGW-w64-runtime.txt, README.txt (sources). **Release to-do: publish the GCC,
+  binutils, Mingw-w64 source archives for w64devkit 2.9.1 with the GitHub release (GPLv3 source offer).**
+  Kit download: github.com/skeeto/w64devkit/releases v2.9.1 w64devkit-x64-2.9.1.7z.exe (7z x).
+  Checked under wine (2 cores, 8 GB): full build 17.5 min, game.dll loads (77080 entries), _build removed;
+  run_headless through that game.dll = Linux static build (stage1, 3000 frames). test27 = public layout
+  (package_release.sh without --with-game-code), 26 MB. **To confirm on Windows: fresh folder + ROMs ->
+  ROM check -> building screen -> game starts; build time; 2nd start skips the build.**
+  Ideas: smaller gen files (per-file < 150) to cut cc1 peak memory; -O1 vs -O2 timing.
 
 ### Next, in order (target v0.8.0)
 1. **Builder (the v0.8.0 blocker)**: the public release must not contain Cave's code. Plan in

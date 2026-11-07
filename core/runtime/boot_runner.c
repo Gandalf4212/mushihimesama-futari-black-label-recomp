@@ -60,6 +60,23 @@ static void wb(void *c, uint32_t a, uint8_t v) { Bus *b = c; uint8_t *m = map(b,
 static void ww(void *c, uint32_t a, uint16_t v) { Bus *b = c; uint8_t *m = map(b, a); if (m && (a & 0x1fffffffu) >= 0x00400000u) { m[0] = v >> 8; m[1] = v; } else if (!m) dev_write(b, a, v, 2); }
 static void wl(void *c, uint32_t a, uint32_t v) { Bus *b = c; uint8_t *m = map(b, a); if (m && (a & 0x1fffffffu) >= 0x00400000u) { m[0] = v >> 24; m[1] = v >> 16; m[2] = v >> 8; m[3] = v; } else if (!m) dev_write(b, a, v, 4); }
 
+/* For the first-run builder: boots the program ROM (as dumped) and fills ram_out (ram_size bytes) with the
+ * RAM image at the main entry. Returns 1 if the entry was reached. */
+static int boot_run_image(const uint8_t *rom, uint32_t rom_size, uint32_t ram_size, uint32_t entry, uint8_t *ram_out)
+{
+    static Bus b;
+    memset(&b, 0, sizeof b);
+    b.rom_size = rom_size; b.rom = malloc(rom_size);
+    for (uint32_t i = 0; i + 1 < rom_size; i += 2) { b.rom[i] = rom[i + 1]; b.rom[i + 1] = rom[i]; }   /* word swap */
+    b.ram_size = ram_size; b.ram = ram_out; memset(ram_out, 0, ram_size);
+    SH3 s; memset(&s, 0, sizeof s);
+    s.bus = (SH3Bus){&b, rb, rw, rl, wb, ww, wl};
+    sh3_reset(&s);
+    while (s.insns < 2000000000ull && (s.pc & 0x1fffffffu) != (entry & 0x1fffffffu) && !s.trap && !s.sleeping) sh3_step(&s);
+    free(b.rom);
+    return (s.pc & 0x1fffffffu) == (entry & 0x1fffffffu);
+}
+
 #ifndef BOOT_RUNNER_NO_MAIN
 int main(int argc, char **argv)
 {

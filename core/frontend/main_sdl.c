@@ -29,7 +29,8 @@
 #include "present.h"
 #include "romfind.h"
 #include "input.h"
-#include "gamedll.h"   /* generated per game: GAME_SET, GAME_TITLE, GAME_RAM_SIZE, GAME_MAIN_ENTRY, GAME_U4, GAME_U2 */
+#include "gamedll.h"
+#include "builder.h"   /* generated per game: GAME_SET, GAME_TITLE, GAME_RAM_SIZE, GAME_MAIN_ENTRY, GAME_U4, GAME_U2 */
 
 static BlitRef g_blit;
 static CV1K g_m;
@@ -136,7 +137,13 @@ int main(int argc, char **argv)
     blit_ref_init(&g_blit); g_m.blit.on_exec = on_exec;
     {   /* game code: assets/game.dll on Windows (built on this PC), else linked in; none = interpreter */
         const RecompEntry *tab; unsigned n; char why[300];
-        if (!game_code_load(&tab, &n, why, sizeof why)) {
+        int loaded = game_code_load(&tab, &n, why, sizeof why);
+        if (!loaded && game_build_available()) {           /* first run (or new version): build it from the ROM */
+            char bwhy[300];
+            if (game_build(bwhy, sizeof bwhy)) loaded = game_code_load(&tab, &n, why, sizeof why);
+            else snprintf(why, sizeof why, "build failed: %s", bwhy);
+        }
+        if (!loaded) {
             char msg[512];
             snprintf(msg, sizeof msg, "The compiled game code could not be loaded (%s).\n\nThe game will run on the interpreter, which is too slow for full speed.", why);
             SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, GAME_TITLE, msg, NULL);

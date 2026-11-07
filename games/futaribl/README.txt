@@ -22,6 +22,13 @@ A ROM check screen shows each file's CRC32 and GOOD / BAD. Press Enter (or A on 
 The program then keeps what it needs in the "assets" folder; the ROM set is not needed after that.
 assets also holds your settings and high scores. Delete it to import the ROMs again.
 
+Next, once only, the game code is built from your ROM on your PC: the "BUILDING GAME CODE" screen
+translates the program to C and compiles it with the bundled compiler (toolchain folder) into
+assets\game.dll. This takes a few minutes (about 3 on 8 cores, 15+ on 2) and needs about 2 GB of free
+memory per core used. The game starts by itself when it is done. This download contains none of the
+game's code: it is made only from your own ROM. If the build fails, assets\build.log says why.
+After a new version of this program the build may run once more.
+
 7z needs Windows' own tar.exe (Windows 11, recent Windows 10). If a 7z is refused, use a zip.
 
 
