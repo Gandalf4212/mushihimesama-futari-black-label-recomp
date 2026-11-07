@@ -13,6 +13,8 @@ print(f'#define GAME_RAM_SIZE {int(g["ram_size"], 16)}u\n#define GAME_MAIN_ENTRY
 print(f'#define GAME_U4 "{f["maincpu"]}"\n#define GAME_U2 "{f["nand"]}"')
 if 'idle' in g: print(f'#define GAME_IDLE_PC {g["idle"]["pc"]}u\n#define GAME_IDLE_RAM {g["idle"]["ram_var"]}u')
 snd = [reg['files'] for reg in r['regions'] if reg['region'] == 'ymz770']
+roms = [x for reg in r['regions'] for x in reg['files']]
+print('#define GAME_ROMS {' + ', '.join(f'{{"{x["name"]}", 0x{x["crc32"]}u, {x["size"]}u}}' for x in roms) + '}')
 if snd and len(snd[0]) >= 2: print(f'#define GAME_SND0 "{snd[0][0]["name"]}"\n#define GAME_SND1 "{snd[0][1]["name"]}"')
 PY
 # our shaders: GLSL -> SPIR-V (glslang-tools) -> C arrays in $B/shaders_spv.h (generated, not committed)

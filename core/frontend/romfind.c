@@ -11,7 +11,9 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdarg.h>
+#include <math.h>
 #include "game_config.h"
+#include "hud.h"
 #ifdef _WIN32
 #include <windows.h>
 #include <direct.h>
@@ -33,12 +35,10 @@ static const char *wanted[] = { GAME_U4, GAME_U2,
 
 static int exists(const char *p) { SDL_PathInfo pi; return SDL_GetPathInfo(p, &pi) && pi.type == SDL_PATHTYPE_FILE; }
 
-/* romfind.log next to the program: what was tried and why it failed */
+/* diagnostics on stderr (what was tried and why it failed) */
 static void logf_(const char *fmt, ...)
 {
-    static FILE *lg; if (!lg) lg = fopen("romfind.log", "w");
-    if (!lg) return;
-    va_list ap; va_start(ap, fmt); vfprintf(lg, fmt, ap); va_end(ap); fputc('\n', lg); fflush(lg);
+    va_list ap; va_start(ap, fmt); vfprintf(stderr, fmt, ap); va_end(ap); fputc('\n', stderr);
 }
 
 void rom_chdir_base(void)
@@ -244,6 +244,127 @@ static int sevenz_extract(const char *arc, const char *outdir)
 #endif
 }
 
+/* ---------------- ROM check screen ---------------- */
+typedef struct { const char *name; uint32_t crc, size; } RomInfo;
+static const RomInfo roms[] = GAME_ROMS;
+#define NROMS ((int)(sizeof roms / sizeof roms[0]))
+static int g_quit;
+
+static uint32_t crc_tab[256];
+static void crc_init(void)
+{
+    for (uint32_t i = 0; i < 256; i++) { uint32_t c = i; for (int k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320u ^ (c >> 1) : c >> 1; crc_tab[i] = c; }
+}
+
+typedef struct { int state; uint32_t crc; Sint64 size; float progress; } RomRow;   /* state 0 pending 1 checking 2 good 3 bad crc 4 bad size 5 missing */
+
+static void fill(SDL_Renderer *r, float x, float y, float w, float h, Uint8 cr, Uint8 cg, Uint8 cb, Uint8 a)
+{
+    SDL_SetRenderDrawColor(r, cr, cg, cb, a); SDL_FRect f = { x, y, w, h }; SDL_RenderFillRect(r, &f);
+}
+
+static void draw_check(SDL_Renderer *r, int W, int H, const RomRow *row, int done, int bad, float t)
+{
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    for (int y = 0; y < H; y += 4) {                                   /* deep blue-violet gradient */
+        float k = (float)y / H;
+        fill(r, 0, (float)y, (float)W, 4, (Uint8)(14 + 10 * k), (Uint8)(10 + 4 * k), (Uint8)(30 + 22 * (1 - k)), 255);
+    }
+    int px = H >= 900 ? 4 : H >= 700 ? 3 : 2, lh = 12 * px, cw = 6 * px;
+    float x0 = W * 0.08f, y0 = H * 0.12f, tw = W * 0.84f;
+    SDL_SetRenderDrawColor(r, 255, 200, 90, 255); hud_text(r, (int)x0, (int)y0, px + 1, "ROM CHECK");
+    SDL_SetRenderDrawColor(r, 170, 170, 200, 255); hud_text(r, (int)x0, (int)(y0 + 13 * (px + 1)), px, GAME_TITLE " (" GAME_SET ")");
+    float sweep = fmodf(t * 0.35f, 1.0f);                              /* animated accent line */
+    fill(r, x0, y0 + 13 * (px + 1) + lh, tw, (float)px, 60, 50, 110, 255);
+    fill(r, x0 + tw * sweep * 0.8f, y0 + 13 * (px + 1) + lh, tw * 0.2f, (float)px, 255, 200, 90, 255);
+    float ty = y0 + 13 * (px + 1) + lh * 2.2f;
+    int cx[5] = { 0, 15, 26, 36, 46 };
+    static const char *hdr[5] = { "FILE", "SIZE", "CRC32", "EXPECTED", "STATUS" };
+    SDL_SetRenderDrawColor(r, 140, 140, 175, 255);
+    for (int c = 0; c < 5; c++) hud_text(r, (int)(x0 + cx[c] * cw), (int)ty, px, hdr[c]);
+    for (int i = 0; i < NROMS; i++) {
+        float y = ty + lh * (1.4f + 1.25f * i);
+        fill(r, x0 - cw, y - px * 2.5f, tw + 2 * cw, lh, 255, 255, 255, i & 1 ? 10 : 22);
+        char b[64];
+        SDL_SetRenderDrawColor(r, 235, 235, 245, 255); hud_text(r, (int)x0, (int)y, px, roms[i].name);
+        if (row[i].state >= 2 && row[i].state != 5) { snprintf(b, sizeof b, "%.1f MB", row[i].size / 1048576.0); hud_text(r, (int)(x0 + cx[1] * cw), (int)y, px, b); }
+        if (row[i].state >= 2 && row[i].state != 5) { snprintf(b, sizeof b, "%08X", row[i].crc); hud_text(r, (int)(x0 + cx[2] * cw), (int)y, px, b); }
+        SDL_SetRenderDrawColor(r, 150, 150, 170, 255);
+        snprintf(b, sizeof b, "%08X", roms[i].crc); hud_text(r, (int)(x0 + cx[3] * cw), (int)y, px, b);
+        float sx = x0 + cx[4] * cw;
+        switch (row[i].state) {
+        case 0: SDL_SetRenderDrawColor(r, 110, 110, 130, 255); hud_text(r, (int)sx, (int)y, px, "-"); break;
+        case 1: fill(r, sx, y, 9 * cw, 7 * px, 60, 60, 90, 255); fill(r, sx, y, 9 * cw * row[i].progress, 7 * px, 255, 200, 90, 255); break;
+        case 2: fill(r, sx - px, y - px, 6 * cw, 9 * px, 20, 120, 50, 255); SDL_SetRenderDrawColor(r, 120, 255, 140, 255); hud_text(r, (int)sx, (int)y, px, "GOOD"); break;
+        default: fill(r, sx - px, y - px, 10 * cw, 9 * px, 130, 20, 30, 255); SDL_SetRenderDrawColor(r, 255, 110, 110, 255);
+                 hud_text(r, (int)sx, (int)y, px, row[i].state == 3 ? "BAD CRC" : row[i].state == 4 ? "BAD SIZE" : "MISSING");
+        }
+    }
+    float fy = ty + lh * (1.4f + 1.25f * NROMS) + lh;
+    if (done) {
+        if (!bad) { SDL_SetRenderDrawColor(r, 120, 255, 140, 255); hud_text(r, (int)x0, (int)fy, px, "ALL ROMS GOOD - PRESS ENTER OR A TO CONTINUE"); }
+        else {
+            SDL_SetRenderDrawColor(r, 255, 110, 110, 255); hud_text(r, (int)x0, (int)fy, px, "SOME ROMS DO NOT MATCH THE " GAME_SET " SET");
+            SDL_SetRenderDrawColor(r, 220, 220, 235, 255); hud_text(r, (int)x0, (int)(fy + lh), px, "ENTER: CONTINUE ANYWAY    ESC: CHOOSE OTHER ROMS");
+        }
+    } else { SDL_SetRenderDrawColor(r, 170, 170, 200, 255); hud_text(r, (int)x0, (int)fy, px, "CHECKING..."); }
+    SDL_RenderPresent(r);
+}
+
+/* 0 = Esc (choose again), 1 = continue, -1 = window closed (quit) */
+static int poll_keys(int done)
+{
+    SDL_Event e;
+    while (SDL_PollEvent(&e)) {
+        if (e.type == SDL_EVENT_QUIT || e.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) return -1;
+        if (!done) continue;
+        if (e.type == SDL_EVENT_KEY_DOWN && (e.key.key == SDLK_RETURN || e.key.key == SDLK_KP_ENTER || e.key.key == SDLK_SPACE)) return 1;
+        if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_ESCAPE) return 0;
+        if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_SOUTH) return 1;
+        if (e.type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e.gbutton.button == SDL_GAMEPAD_BUTTON_EAST) return 0;
+        if (e.type == SDL_EVENT_MOUSE_BUTTON_DOWN) return 1;
+    }
+    return 2;
+}
+
+/* Shows the check screen for the ROM files in dir. 1 = go on with setup, 0 = choose again (or quit: g_quit) */
+static int check_screen(const char *dir)
+{
+    SDL_InitSubSystem(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD);
+    const SDL_DisplayMode *dm = SDL_GetDesktopDisplayMode(SDL_GetPrimaryDisplay());
+    int W = dm ? dm->w * 6 / 10 : 1152, H = W * 9 / 16;
+    SDL_Window *win = SDL_CreateWindow(GAME_TITLE " - ROM check", W, H, 0);
+    SDL_Renderer *r = win ? SDL_CreateRenderer(win, NULL) : NULL;
+    if (!r) { if (win) SDL_DestroyWindow(win); return 1; }                  /* no screen: just continue */
+    SDL_SetRenderVSync(r, 1);
+    SDL_GetCurrentRenderOutputSize(r, &W, &H);
+    crc_init();
+    RomRow row[NROMS]; memset(row, 0, sizeof row);
+    int bad = 0, res = 2; Uint64 t0 = SDL_GetTicks();
+    static uint8_t buf[1 << 20];
+    for (int i = 0; i < NROMS && res == 2; i++) {
+        char p[1024]; snprintf(p, sizeof p, "%s/%s", dir, roms[i].name);
+        SDL_IOStream *f = SDL_IOFromFile(p, "rb");
+        if (!f) { row[i].state = 5; bad = 1; continue; }
+        row[i].state = 1; row[i].size = SDL_GetIOSize(f);
+        uint32_t c = 0xFFFFFFFFu; Sint64 doneb = 0; size_t n; Uint64 last = 0;
+        while ((n = SDL_ReadIO(f, buf, sizeof buf)) > 0) {
+            for (size_t k = 0; k < n; k++) c = crc_tab[(c ^ buf[k]) & 0xFF] ^ (c >> 8);
+            doneb += (Sint64)n; row[i].progress = row[i].size > 0 ? (float)doneb / row[i].size : 1;
+            if (SDL_GetTicks() - last > 30) { last = SDL_GetTicks(); res = poll_keys(0); if (res != 2) break; draw_check(r, W, H, row, 0, bad, (SDL_GetTicks() - t0) / 1000.f); }
+        }
+        SDL_CloseIO(f);
+        row[i].crc = ~c;
+        row[i].state = row[i].size != (Sint64)roms[i].size ? 4 : row[i].crc != roms[i].crc ? 3 : 2;
+        if (row[i].state != 2) bad = 1;
+        logf_("%s: crc %08x size %lld -> %s", roms[i].name, row[i].crc, (long long)row[i].size, row[i].state == 2 ? "good" : "bad");
+    }
+    while (res == 2) { res = poll_keys(1); draw_check(r, W, H, row, 1, bad, (SDL_GetTicks() - t0) / 1000.f); }
+    SDL_DestroyRenderer(r); SDL_DestroyWindow(win);
+    if (res < 0) g_quit = 1;
+    return res == 1;
+}
+
 static int ends_with(const char *s, const char *e) { size_t a = strlen(s), b = strlen(e); return a >= b && !SDL_strcasecmp(s + a - b, e); }
 
 /* archive -> TMPDIR -> setup; extracted copies are removed afterwards */
@@ -252,7 +373,7 @@ static int from_archive(const char *arc, int (*setup)(const char *))
     if (!exists(arc)) { logf_("%s: not found", arc); return 0; }
     MKDIR("assets"); MKDIR(TMPDIR);
     int got = ends_with(arc, ".7z") ? sevenz_extract(arc, TMPDIR) : zip_extract(arc, TMPDIR);
-    int ok = got >= 2 && setup(TMPDIR) == 0;
+    int ok = got >= 2 && check_screen(TMPDIR) && setup(TMPDIR) == 0;
     logf_("%s: %d files, setup %s", arc, got, ok ? "ok" : "failed");
     char p[1024];
     for (int w = 0; w < NWANTED; w++) { snprintf(p, sizeof p, "%s/%s", TMPDIR, wanted[w]); remove(p); }
@@ -268,14 +389,14 @@ static int from_path(const char *path, int (*setup)(const char *))
 {
     if (ends_with(path, ".zip") || ends_with(path, ".7z")) return from_archive(path, setup);
     char p[1024]; snprintf(p, sizeof p, "%s/%s", path, GAME_U4);
-    if (exists(p)) return setup(path) == 0;
+    if (exists(p)) return check_screen(path) && setup(path) == 0;
     /* a file inside the ROM folder was picked: use its folder */
     snprintf(p, sizeof p, "%s", path);
     char *s = strrchr(p, '/'), *b = strrchr(p, '\\'); if (b > s) s = b;
     if (!s) return 0;
     *s = 0;
     char q[1024]; snprintf(q, sizeof q, "%s/%s", p, GAME_U4);
-    return exists(q) && setup(p) == 0;
+    return exists(q) && check_screen(p) && setup(p) == 0;
 }
 
 typedef struct { volatile int done; char path[1024]; } Pick;
@@ -291,8 +412,9 @@ int rom_setup(int (*setup)(const char *romdir))
     static const char *dirs[] = { GAME_SET, "roms/" GAME_SET };
     static const char *arcs[] = { GAME_SET ".zip", "roms/" GAME_SET ".zip", GAME_SET ".7z", "roms/" GAME_SET ".7z" };
     char p[1024];
-    for (int i = 0; i < 2; i++) { snprintf(p, sizeof p, "%s/%s", dirs[i], GAME_U4); if (exists(p) && setup(dirs[i]) == 0) return 0; }
-    for (int i = 0; i < 4; i++) if (from_archive(arcs[i], setup)) return 0;
+    for (int i = 0; i < 2 && !g_quit; i++) { snprintf(p, sizeof p, "%s/%s", dirs[i], GAME_U4); if (exists(p) && check_screen(dirs[i]) && setup(dirs[i]) == 0) return 0; }
+    for (int i = 0; i < 4 && !g_quit; i++) if (from_archive(arcs[i], setup)) return 0;
+    if (g_quit) return 1;
 
     const char *msg = "The " GAME_SET " ROM set was not found.\n\nPut " GAME_SET ".zip, " GAME_SET ".7z or a folder named \""
                       GAME_SET "\" next to this program, or choose it now.\nIt is only needed once: the game keeps what it needs in assets\\.";
@@ -313,6 +435,7 @@ int rom_setup(int (*setup)(const char *romdir))
         if (!k.path[0]) continue;                                       /* cancelled */
         logf_("picked %s", k.path);
         if (from_path(k.path, setup)) return 0;
+        if (g_quit) return 1;
         msg = "That did not contain the " GAME_SET " ROMs (" GAME_U4 ", " GAME_U2 ").\n\n"
               "Choose " GAME_SET ".zip / .7z or the folder holding the ROM files.";
     }

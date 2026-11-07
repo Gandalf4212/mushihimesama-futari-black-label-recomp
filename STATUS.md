@@ -16,6 +16,11 @@
   Cause: core/frontend/input.c opened the same controller twice (explicit open at startup + SDL's
   CONTROLLERDEVICEADDED for already-connected pads), so one pad drove both players' inputs incl.
   Start, and free play coined + started both. Now an already-open pad is ignored.
+* **test15 (2026-11-06): ROM check screen on import** (romfind.c check_screen): own window, HUD font, CRC32
+  of each ROM with a progress bar, rows FILE / SIZE / CRC32 / EXPECTED / STATUS (GOOD green; BAD CRC, BAD
+  SIZE, MISSING red); Enter/A/click continue, Esc/B choose other ROMs. Expected CRCs/sizes come from
+  romset.json via GAME_ROMS in game_config.h. romfind.log removed (diagnostics on stderr). test14: the
+  user's earlier zip was bad; remade .zip and .7z both import fine (7z via tar.exe confirmed).
 * **test14 (2026-11-06):** user's WinRAR zip was rejected on test13 (our inflate is fine: Python and Info-ZIP
   zips -1/-6/-9 all decode byte-identical). Changes: working folder = program folder at start and after
   the file dialog (rom_chdir_base), archive I/O through SDL_IOStream (UTF-8 paths), romfind.log written
