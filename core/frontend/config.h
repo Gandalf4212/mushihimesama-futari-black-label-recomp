@@ -8,10 +8,14 @@ typedef enum { ORIENT_YOKO, ORIENT_TATE_CW, ORIENT_TATE_CCW } Orientation;
 /* Control bindings. Actions per player (P2 = P1 + ACT_PER_PLAYER), then the cabinet switches. */
 enum { ACT_UP, ACT_DOWN, ACT_LEFT, ACT_RIGHT, ACT_B1, ACT_B2, ACT_B3, ACT_B4, ACT_START, ACT_COIN, ACT_PER_PLAYER };
 enum { ACT_SERVICE = 2 * ACT_PER_PLAYER, ACT_TEST, ACT_COUNT };
-/* Gamepad buttons (both pads; directions are always d-pad + left stick) */
-enum { PAD_B1, PAD_B2, PAD_B3, PAD_B4, PAD_START, PAD_COIN, PAD_COUNT };
+/* Gamepad bindings, shared by both pads: per player action up to two pad inputs, encoded as
+   0 none, 1 + SDL_GamepadButton, or PAD_AXIS + 2 * SDL_GamepadAxis + (1 for the negative direction). */
+#define PAD_COUNT ACT_PER_PLAYER
+#define PAD_AXIS 100
+int  pad_bind_parse(const char *s);                    /* "a", "dpup", "-lefty", "+righttrigger" -> code */
+void pad_bind_name(int code, char *out, int n);
 extern const char *const act_key_name[ACT_COUNT];     /* config keys: p1_up ... service, test */
-extern const char *const pad_key_name[PAD_COUNT];     /* config keys: pad_b1 ... pad_coin */
+extern const char *const pad_key_name[PAD_COUNT];     /* config keys: pad_up ... pad_coin */
 typedef struct {
     Orientation orientation;   /* [video] orientation = "yoko" | "tate-cw" | "tate-ccw" */
     int scale;                 /* [video] scale = 0 (auto) */
@@ -32,7 +36,7 @@ typedef struct {
     int artwork_views;         /* runtime: views in the loaded .lay (not saved) */
     int uncapped;              /* [video] uncapped = false (benchmark: present as fast as possible; game stays 60.024 Hz) */
     int key[ACT_COUNT][2];     /* [input] p1_up = "Up" ... : up to two SDL scancodes per action (0 = none) */
-    int pad[PAD_COUNT];        /* [input] pad_b1 = "a" ... : SDL gamepad button (-1 = none) */
+    int pad[PAD_COUNT][2];     /* [input] pad_up = "dpup, -lefty" ... : two pad inputs per action (0 = none) */
 } Config;
 void config_defaults(Config *c);
 void config_default_controls(Config *c);

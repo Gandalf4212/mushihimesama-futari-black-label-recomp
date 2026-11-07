@@ -23,23 +23,24 @@ void input_pad_removed(Input *in, SDL_JoystickID id)
         if (in->pad[p] && SDL_GetGamepadID(in->pad[p]) == id) { SDL_CloseGamepad(in->pad[p]); in->pad[p] = NULL; }
 }
 
+static int pad_on(SDL_Gamepad *g, int code)
+{
+    if (code >= PAD_AXIS) {
+        int a = (code - PAD_AXIS) / 2, v = SDL_GetGamepadAxis(g, (SDL_GamepadAxis)a);
+        return (code - PAD_AXIS) & 1 ? v < -16000 : v > 16000;
+    }
+    return code > 0 && SDL_GetGamepadButton(g, (SDL_GamepadButton)(code - 1));
+}
+
 static uint8_t pad_bits(SDL_Gamepad *g, const Config *c, int *start, int *coin)
 {
     if (!g) return 0;
-    int ax = SDL_GetGamepadAxis(g, SDL_GAMEPAD_AXIS_LEFTX), ay = SDL_GetGamepadAxis(g, SDL_GAMEPAD_AXIS_LEFTY);
+    static const uint8_t bit[ACT_PER_PLAYER] = { UP, DOWN, LEFT, RIGHT, B1, B2, B3, B4, 0, 0 };
     uint8_t b = 0;
-    if (SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_DPAD_UP) || ay < -16000) b |= UP;
-    if (SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_DPAD_DOWN) || ay > 16000) b |= DOWN;
-    if (SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_DPAD_LEFT) || ax < -16000) b |= LEFT;
-    if (SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_DPAD_RIGHT) || ax > 16000) b |= RIGHT;
-#define PB(i) (c->pad[i] >= 0 && SDL_GetGamepadButton(g, (SDL_GamepadButton)c->pad[i]))
-    if (PB(PAD_B1)) b |= B1;
-    if (PB(PAD_B2)) b |= B2;
-    if (PB(PAD_B3)) b |= B3;
-    if (PB(PAD_B4)) b |= B4;
-    *start |= PB(PAD_START);
-    *coin |= PB(PAD_COIN);
-#undef PB
+    for (int a = 0; a < ACT_PER_PLAYER; a++) {
+        if (!pad_on(g, c->pad[a][0]) && !pad_on(g, c->pad[a][1])) continue;
+        if (a == ACT_START) *start = 1; else if (a == ACT_COIN) *coin = 1; else b |= bit[a];
+    }
     return b;
 }
 

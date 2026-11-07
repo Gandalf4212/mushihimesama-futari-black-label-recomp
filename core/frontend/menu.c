@@ -75,15 +75,7 @@ static int move(Menu *m, int d) { m->sel = (m->sel + I_COUNT + d) % I_COUNT; ret
  * d-pad + left stick). Delete clears a row's keys, X (pad) clears its pad button. */
 enum { C_RESET = ACT_COUNT, C_BACK, C_ROWS };
 
-static int pad_slot(int r)               /* action row -> pad mapping index, -1 if the pad is fixed / none */
-{
-    if (r >= 2 * ACT_PER_PLAYER) return -1;
-    switch (r % ACT_PER_PLAYER) {
-    case ACT_B1: return PAD_B1; case ACT_B2: return PAD_B2; case ACT_B3: return PAD_B3; case ACT_B4: return PAD_B4;
-    case ACT_START: return PAD_START; case ACT_COIN: return PAD_COIN;
-    }
-    return -1;
-}
+static int pad_slot(int r) { return r < 2 * ACT_PER_PLAYER ? r % ACT_PER_PLAYER : -1; }   /* -1: keys only */
 
 static void crow_label(int r, char *out, size_t n)
 {
@@ -100,12 +92,12 @@ static void crow_value(const Config *c, int r, char *out, size_t n)
     if (r >= ACT_COUNT) return;
     const char *a = c->key[r][0] ? SDL_GetScancodeName((SDL_Scancode)c->key[r][0]) : "";
     const char *b = c->key[r][1] ? SDL_GetScancodeName((SDL_Scancode)c->key[r][1]) : "";
-    char pad[24] = "";
+    char pad[48] = "";
     int ps = pad_slot(r);
     if (ps >= 0) {
-        const char *p = c->pad[ps] >= 0 ? SDL_GetGamepadStringForButton((SDL_GamepadButton)c->pad[ps]) : NULL;
-        snprintf(pad, sizeof pad, " | PAD %s", p ? p : "-");
-    } else if (r < 2 * ACT_PER_PLAYER) snprintf(pad, sizeof pad, " | PAD DPAD");
+        char p0[24], p1[24]; pad_bind_name(c->pad[ps][0], p0, 24); pad_bind_name(c->pad[ps][1], p1, 24);
+        snprintf(pad, sizeof pad, " | PAD %s%s%s", p0, *p0 && *p1 ? " / " : "", *p0 || *p1 ? p1 : "-");
+    }
     snprintf(out, n, "%s%s%s%s", a, *a && *b ? " / " : "", *a || *b ? b : "-", pad);
 }
 
@@ -120,13 +112,20 @@ static int controls_event(Menu *m, Config *c, const SDL_Event *e)
             if (c->key[r][0] != (int)sc) { c->key[r][1] = c->key[r][0]; c->key[r][0] = sc; }   /* newest first, keep one more */
             if (c->key[r][1] == (int)sc) c->key[r][1] = 0;
             m->capture = 0; m->dirty = 1;
-        } else if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e->gbutton.button != SDL_GAMEPAD_BUTTON_GUIDE) {
-            int ps = pad_slot(r), b = e->gbutton.button;
+        } else if ((e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e->gbutton.button != SDL_GAMEPAD_BUTTON_GUIDE) ||
+                   (e->type == SDL_EVENT_GAMEPAD_AXIS_MOTION && (e->gaxis.value > 24000 || e->gaxis.value < -24000))) {
+            int code = e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN ? 1 + e->gbutton.button
+                                                                 : PAD_AXIS + 2 * e->gaxis.axis + (e->gaxis.value < 0);
+            int ps = pad_slot(r);
             if (ps >= 0) {
-                for (int j = 0; j < PAD_COUNT; j++) if (j != ps && c->pad[j] == b) c->pad[j] = c->pad[ps];   /* swap a clash */
-                c->pad[ps] = b; m->dirty = 1;
+                for (int j = 0; j < PAD_COUNT; j++)                     /* one input drives one action */
+                    for (int k = 0; k < 2; k++) if (c->pad[j][k] == code) c->pad[j][k] = 0;
+                for (int j = 0; j < PAD_COUNT; j++) if (!c->pad[j][0] && c->pad[j][1]) { c->pad[j][0] = c->pad[j][1]; c->pad[j][1] = 0; }
+                c->pad[ps][1] = c->pad[ps][0]; c->pad[ps][0] = code;    /* newest first, keep one more */
+                m->dirty = 1;
             }
-            m->capture = 0;                    /* direction / cabinet rows: a pad press just cancels */
+            m->capture = 0;
+            m->repeat_at = SDL_GetTicks() + 400;                        /* the stick is still held: no menu move */
         }
         return 0;
     }
@@ -159,7 +158,7 @@ static int controls_event(Menu *m, Config *c, const SDL_Event *e)
     if (mv) m->csel = (m->csel + C_ROWS + mv) % C_ROWS;
     if (back) { m->page = 0; m->capture = 0; }
     if (clr_keys && r < ACT_COUNT) { c->key[r][0] = c->key[r][1] = 0; m->dirty = 1; }
-    if (clr_pad && pad_slot(r) >= 0) { c->pad[pad_slot(r)] = -1; m->dirty = 1; }
+    if (clr_pad && pad_slot(r) >= 0) { c->pad[pad_slot(r)][0] = c->pad[pad_slot(r)][1] = 0; m->dirty = 1; }
     if (act) {
         if (r < ACT_COUNT) m->capture = 1;
         else if (r == C_RESET) { config_default_controls(c); m->dirty = 1; }
@@ -183,9 +182,9 @@ static void controls_draw(const Menu *m, const Config *c, SDL_Renderer *r, int p
         }
         char l[32], v[64]; crow_label(i, l, sizeof l);
         SDL_SetRenderDrawColor(r, 255, 255, 255, 255); hud_text(r, x0 + cw * 2, y, px, l);
-        if (i == m->csel && m->capture) snprintf(v, sizeof v, pad_slot(i) >= 0 ? "PRESS A KEY OR PAD BUTTON" : "PRESS A KEY");
+        if (i == m->csel && m->capture) snprintf(v, sizeof v, pad_slot(i) >= 0 ? "PRESS A KEY, PAD BUTTON OR STICK" : "PRESS A KEY");
         else crow_value(c, i, v, sizeof v);
-        if (strlen(v) > 30) v[30] = 0;
+        if (strlen(v) > 40) v[40] = 0;
         SDL_SetRenderDrawColor(r, 255, 220, 120, 255); hud_text(r, x0 + cw * 14, y, px, v);
     }
     SDL_SetRenderDrawColor(r, 150, 150, 150, 255);

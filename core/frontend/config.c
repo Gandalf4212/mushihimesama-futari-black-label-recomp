@@ -1,12 +1,34 @@
 /* Minimal TOML-subset config reader/writer. GPL-2.0-or-later. */
 #include "config.h"
+#include <stdio.h>
 #include <SDL3/SDL.h>
 
 const char *const act_key_name[ACT_COUNT] = {
     "p1_up", "p1_down", "p1_left", "p1_right", "p1_b1", "p1_b2", "p1_b3", "p1_b4", "p1_start", "p1_coin",
     "p2_up", "p2_down", "p2_left", "p2_right", "p2_b1", "p2_b2", "p2_b3", "p2_b4", "p2_start", "p2_coin",
     "service", "test" };
-const char *const pad_key_name[PAD_COUNT] = { "pad_b1", "pad_b2", "pad_b3", "pad_b4", "pad_start", "pad_coin" };
+const char *const pad_key_name[PAD_COUNT] = { "pad_up", "pad_down", "pad_left", "pad_right", "pad_b1", "pad_b2", "pad_b3",
+                                              "pad_b4", "pad_start", "pad_coin" };
+
+int pad_bind_parse(const char *s)
+{
+    while (*s == ' ') s++;
+    if (*s == '+' || *s == '-') {
+        SDL_GamepadAxis a = SDL_GetGamepadAxisFromString(s + 1);
+        return a == SDL_GAMEPAD_AXIS_INVALID ? 0 : PAD_AXIS + 2 * a + (*s == '-');
+    }
+    SDL_GamepadButton b = SDL_GetGamepadButtonFromString(s);
+    return b == SDL_GAMEPAD_BUTTON_INVALID ? 0 : 1 + b;
+}
+
+void pad_bind_name(int code, char *out, int n)
+{
+    const char *s = NULL;
+    if (code >= PAD_AXIS) s = SDL_GetGamepadStringForAxis((SDL_GamepadAxis)((code - PAD_AXIS) / 2));
+    else if (code > 0) s = SDL_GetGamepadStringForButton((SDL_GamepadButton)(code - 1));
+    if (!s) { out[0] = 0; return; }
+    snprintf(out, (size_t)n, "%s%s", code >= PAD_AXIS ? ((code - PAD_AXIS) & 1 ? "-" : "+") : "", s);
+}
 
 /* MAME's default keys, plus Z X C V for P1's buttons */
 void config_default_controls(Config *c)
@@ -19,8 +41,13 @@ void config_default_controls(Config *c)
         {SDL_SCANCODE_A}, {SDL_SCANCODE_S}, {SDL_SCANCODE_Q}, {SDL_SCANCODE_W}, {SDL_SCANCODE_2}, {SDL_SCANCODE_6},
         {SDL_SCANCODE_9}, {SDL_SCANCODE_F2} };
     memcpy(c->key, k, sizeof k);
-    static const int p[PAD_COUNT] = { SDL_GAMEPAD_BUTTON_SOUTH, SDL_GAMEPAD_BUTTON_EAST, SDL_GAMEPAD_BUTTON_WEST,
-                                      SDL_GAMEPAD_BUTTON_NORTH, SDL_GAMEPAD_BUTTON_START, SDL_GAMEPAD_BUTTON_BACK };
+#define B_(x) (1 + SDL_GAMEPAD_BUTTON_##x)
+#define A_(x, neg) (PAD_AXIS + 2 * SDL_GAMEPAD_AXIS_##x + (neg))
+    static const int p[PAD_COUNT][2] = {
+        {B_(DPAD_UP), A_(LEFTY, 1)}, {B_(DPAD_DOWN), A_(LEFTY, 0)}, {B_(DPAD_LEFT), A_(LEFTX, 1)}, {B_(DPAD_RIGHT), A_(LEFTX, 0)},
+        {B_(SOUTH)}, {B_(EAST)}, {B_(WEST)}, {B_(NORTH)}, {B_(START)}, {B_(BACK)} };
+#undef B_
+#undef A_
     memcpy(c->pad, p, sizeof p);
 }
 #include <ctype.h>
@@ -78,8 +105,11 @@ static void set(Config *c, const char *sec, const char *key, const char *v)
             }
             return;
         }
-        for (int i = 0; i < PAD_COUNT; i++) if (!strcmp(k, pad_key_name[i])) {
-            c->pad[i] = *v ? SDL_GetGamepadButtonFromString(v) : -1; return;
+        for (int i = 0; i < PAD_COUNT; i++) if (!strcmp(k, pad_key_name[i])) {      /* "dpup, -lefty" */
+            char buf[128]; snprintf(buf, sizeof buf, "%s", v);
+            c->pad[i][0] = c->pad[i][1] = 0; int n = 0;
+            for (char *t = strtok(buf, ","); t && n < 2; t = strtok(NULL, ",")) { int code = pad_bind_parse(t); if (code) c->pad[i][n++] = code; }
+            return;
         }
         fprintf(stderr, "config: unknown key %s\n", full);
     }
@@ -162,10 +192,11 @@ int config_save(const Config *c, const char *path)
         const char *k1 = c->key[i][1] ? SDL_GetScancodeName((SDL_Scancode)c->key[i][1]) : "";
         fprintf(f, "%s = \"%s%s%s\"\n", act_key_name[i], k0, *k0 && *k1 ? ", " : "", k1);
     }
-    fprintf(f, "# gamepad buttons (both pads): a b x y back guide start leftstick rightstick leftshoulder rightshoulder ...\n");
+    fprintf(f, "# gamepad (both pads), two per action: buttons a b x y back start leftshoulder rightshoulder dpup ...,\n"
+               "# stick / trigger directions -leftx +leftx -lefty +lefty -rightx ... +lefttrigger +righttrigger\n");
     for (int i = 0; i < PAD_COUNT; i++) {
-        const char *b = c->pad[i] >= 0 ? SDL_GetGamepadStringForButton((SDL_GamepadButton)c->pad[i]) : NULL;
-        fprintf(f, "%s = \"%s\"\n", pad_key_name[i], b ? b : "");
+        char a0[32], a1[32]; pad_bind_name(c->pad[i][0], a0, 32); pad_bind_name(c->pad[i][1], a1, 32);
+        fprintf(f, "%s = \"%s%s%s\"\n", pad_key_name[i], a0, *a0 && *a1 ? ", " : "", a1);
     }
     fclose(f);
     return 1;

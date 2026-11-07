@@ -23,6 +23,9 @@
 * **test19 (2026-11-06):** test18's PAD rows (bottom of the list) were not found by the user and action rows
   ignored pads. Now each action row takes a key or a pad button (button rows; pad mapping shared by both
   pads, clashes swap), Del clears keys, X clears the pad button; menu box 56 chars wide.
+* **test20 (2026-11-06):** pad bindings per player action (directions too), two each, buttons or stick /
+  trigger directions (code: 0, 1+button, PAD_AXIS+2*axis+neg; config pad_up = "dpup, -lefty"). Capture
+  takes a key, pad button or stick push (>24000); one pad input drives one action (taken from others).
 * **Requested: optional gamepad rumble when the player is hit** (config + menu toggle, SDL_RumbleGamepad
   on that player's pad). Needs the per-player lives (or death flag) RAM address: find it by a RAM diff
   around a death (run_headless with an input file that dies, or a MAME cheat/watch), then check per frame.

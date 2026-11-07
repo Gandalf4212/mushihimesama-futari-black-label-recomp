@@ -38,9 +38,10 @@ Gamepad: d-pad or left stick, A B X Y = buttons 1-4, Start = start, Back = coin.
 Two pads: the first is player 1, the second player 2.
 
 All of these can be changed in F1 > CONTROLS...: pick an action, press Enter (or A), then press the
-new key or pad button. Each action keeps up to two keys and one pad button (pad buttons are shared by
-both pads; directions are always the d-pad and left stick). Delete clears a row's keys, X on a pad
-clears its pad button, RESET TO DEFAULTS restores the list above. Saved in config.toml under [input].
+new key, pad button, stick direction or trigger. Each action keeps up to two keys and two pad inputs
+(the pad mapping is shared by both pads; directions start on the d-pad and left stick). Delete clears a
+row's keys, X on a pad clears its pad inputs, RESET TO DEFAULTS restores the defaults. Saved in
+config.toml under [input].
 
 F1           settings menu (gamepad: Guide, or Back + Start). The game pauses while it is open.
 F10          performance overlay
