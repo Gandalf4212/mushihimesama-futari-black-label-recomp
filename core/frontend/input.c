@@ -90,3 +90,10 @@ void input_frame(Input *in, const Config *cfg, int rot_cw, int rot_ccw, uint8_t 
     *port_f = (uint8_t)~(DOWN_(ACT_TEST) ? 0x02 : 0);
 #undef DOWN_
 }
+
+void input_rumble(Input *in, int player, int level)
+{
+    if (player < 0 || player > 1 || !in->pad[player] || level <= 0) return;
+    if (level >= 2) SDL_RumbleGamepad(in->pad[player], 0xFFFF, 0xC000, 450);
+    else SDL_RumbleGamepad(in->pad[player], 0x7000, 0x3800, 300);
+}

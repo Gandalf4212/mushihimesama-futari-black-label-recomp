@@ -59,7 +59,7 @@ void config_defaults(Config *c)
 {
     c->orientation = ORIENT_YOKO; c->scale = 0; c->fullscreen = 0; c->hud = 0;
     c->slowdown = 1; c->freeplay = 1; c->rotate_controls = 0; c->vsync = 1; c->rate = RATE_NATIVE; c->volume = 100;
-    config_default_controls(c);
+    config_default_controls(c); c->rumble = 1;
     c->scaling = SCALING_FIT; c->shader = SHADER_SHARP; c->bezel = 1; c->artwork[0] = 0; c->artwork_views = 0; c->uncapped = 0;
 }
 
@@ -84,6 +84,7 @@ static void set(Config *c, const char *sec, const char *key, const char *v)
     else if (!strcmp(full, "game.slowdown")) c->slowdown = as_bool(v);
     else if (!strcmp(full, "game.freeplay")) c->freeplay = as_bool(v);
     else if (!strcmp(full, "input.rotate_controls")) c->rotate_controls = as_bool(v);
+    else if (!strcmp(full, "input.rumble")) { c->rumble = !strcmp(v, "true") ? 1 : !strcmp(v, "false") ? 0 : atoi(v); if (c->rumble < 0 || c->rumble > 2) c->rumble = 1; }
     else if (!strcmp(full, "video.vsync")) c->vsync = as_bool(v);
     else if (!strcmp(full, "game.frame_rate")) c->rate = !strcmp(v, "display") ? RATE_DISPLAY : RATE_NATIVE;   /* old "mame"/"pcb" -> native */
     else if (!strcmp(full, "audio.volume")) { c->volume = atoi(v); if (c->volume < 0) c->volume = 0; if (c->volume > 100) c->volume = 100; }
@@ -153,6 +154,7 @@ int config_args(Config *c, int argc, char **argv)
         else if (!strcmp(a, "--freeplay")) c->freeplay = 1;
         else if (!strcmp(a, "--coins")) c->freeplay = 0;
         else if (!strcmp(a, "--rotate-controls")) c->rotate_controls = 1;
+        else if (!strcmp(a, "--no-rumble")) c->rumble = 0;
         else if (!strcmp(a, "--no-vsync")) c->vsync = 0;
         else if (!strcmp(a, "--sync-display")) c->rate = RATE_DISPLAY;
         else if (!strcmp(a, "--uncapped")) c->uncapped = 1;
@@ -186,6 +188,7 @@ int config_save(const Config *c, const char *path)
     fprintf(f, "[game]\nslowdown = %s          # original slowdown\nfreeplay = %s          # Start inserts a coin when needed\nframe_rate = \"%s\"      # native (60.024 Hz) | display (1 frame per refresh on ~60 Hz)\n\n[audio]\nvolume = %d            # 0-100\n\n",
             c->slowdown ? "true" : "false", c->freeplay ? "true" : "false", c->rate == RATE_DISPLAY ? "display" : "native", c->volume);
     fprintf(f, "[input]\nrotate_controls = %s   # rotate stick directions with a Tate display\n", c->rotate_controls ? "true" : "false");
+    fprintf(f, "rumble = %d              # gamepad rumble when that player loses a life: 0 off, 1 low, 2 high\n", c->rumble);
     fprintf(f, "# keys: up to two per action, SDL key names; F1 menu > CONTROLS changes them\n");
     for (int i = 0; i < ACT_COUNT; i++) {
         const char *k0 = c->key[i][0] ? SDL_GetScancodeName((SDL_Scancode)c->key[i][0]) : "";

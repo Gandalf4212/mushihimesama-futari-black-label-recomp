@@ -27,17 +27,14 @@
   trigger directions (code: 0, 1+button, PAD_AXIS+2*axis+neg; config pad_up = "dpup, -lefty"). Capture
   takes a key, pad button or stick push (>24000); one pad input drives one action (taken from others).
 * **test21 (2026-11-06):** RESET TO DEFAULTS moved to the top of the CONTROLS page (user didn't find it at the bottom).
-* **Rumble investigation (2026-11-06, unfinished):** RAM-diff of run_headless dumps (stage1.txt, only B1
-  pressed, so no bombs). Candidate 0x0C200DB0 (and copy DB4, 32-bit BE): 4 from game start, 4 -> 3 at
-  frame ~5302 (1P run); word before (0x0C200DAC) 1 -> 4 -> 0 -> 3 -> 2 looks like a game state. In the 2P
-  run (/tmp/two.txt: COIN1 x2, START1, START2) both DB0 and DB4 drop together and later return to 4, so it
-  may be a shared/state value, not per-player lives: UNCONFIRMED. Many 0x0C5F8xxx 2 -> 1 bytes (object
-  pool) also drop. Blocker: run_headless --png writes all-black frames (every frame, with or without
-  --png-range): fix that first, then confirm with screenshots, or ask the user to watch the address in
-  MAME's debugger while losing a life. Dumps are 128 MB each (whole 0x8000000 map): use few frames.
-* **Requested: optional gamepad rumble when the player is hit** (config + menu toggle, SDL_RumbleGamepad
-  on that player's pad). Needs the per-player lives (or death flag) RAM address: find it by a RAM diff
-  around a death (run_headless with an input file that dies, or a MAME cheat/watch), then check per frame.
+* **test22 (2026-11-06): rumble.** Lives bytes found by RAM diff of run_headless dumps and confirmed against
+  screenshots (HUD ship icons): **P1 0x0C383E4F, P2 0x0C383F1B** (lives incl. the ship in play, start 3,
+  player structs 0xCC apart). In game.json "lives" -> GAME_LIVES_P1/P2 -> main_sdl.c rumbles that
+  player's pad (SDL_RumbleGamepad) when its byte drops by 1. Config [input] rumble = 0/1/2 (default 1),
+  F1 > RUMBLE, --no-rumble. Earlier 0x0C200DB0 candidate was wrong (bad RAM size, see below).
+* **run_headless RAM size is 800000 (8 MB, game.json ram_size), not 8000000.** With 8000000 the blitter
+  reads its lists from the wrong place: --png frames are black and --dump-ram writes 128 MB per frame.
+  (The handoff text had 8000000.)
 * **test18 (2026-11-06): control remapping.** config.h bindings: key[ACT_COUNT][2] (P1/P2 up..coin, service,
   test; SDL scancode names in config.toml [input], e.g. p1_b1 = "Left Ctrl, Z") and pad[PAD_COUNT]
   (B1-B4, start, coin for both pads; SDL gamepad button names; directions fixed d-pad + left stick).

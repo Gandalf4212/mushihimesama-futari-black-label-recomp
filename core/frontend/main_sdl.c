@@ -224,6 +224,17 @@ int main(int argc, char **argv)
                 cv1k_timers(&g_m);
             }
             cv1k_vsync(&g_m); g_m.next_vsync = cv1k_vsync_at(g_m.frame);
+#ifdef GAME_LIVES_P1
+            {   /* rumble: a player's lives byte went down (a ship was lost) */
+                static const uint32_t lives_at[2] = { GAME_LIVES_P1, GAME_LIVES_P2 };
+                static int last[2] = { -1, -1 };
+                for (int p = 0; p < 2; p++) {
+                    int v = g_m.ram[lives_at[p] & (g_m.ram_size - 1)];
+                    if (last[p] > 0 && v == last[p] - 1) input_rumble(&in, p, cfg.rumble);
+                    last[p] = v;
+                }
+            }
+#endif
             if (g_m.ymz) {
                 cv1k_sound_catchup(&g_m);
                 int n = cv1k_sound_read(&g_m, abuf, 4096);
