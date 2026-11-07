@@ -26,6 +26,15 @@
 * **test20 (2026-11-06):** pad bindings per player action (directions too), two each, buttons or stick /
   trigger directions (code: 0, 1+button, PAD_AXIS+2*axis+neg; config pad_up = "dpup, -lefty"). Capture
   takes a key, pad button or stick push (>24000); one pad input drives one action (taken from others).
+* **test21 (2026-11-06):** RESET TO DEFAULTS moved to the top of the CONTROLS page (user didn't find it at the bottom).
+* **Rumble investigation (2026-11-06, unfinished):** RAM-diff of run_headless dumps (stage1.txt, only B1
+  pressed, so no bombs). Candidate 0x0C200DB0 (and copy DB4, 32-bit BE): 4 from game start, 4 -> 3 at
+  frame ~5302 (1P run); word before (0x0C200DAC) 1 -> 4 -> 0 -> 3 -> 2 looks like a game state. In the 2P
+  run (/tmp/two.txt: COIN1 x2, START1, START2) both DB0 and DB4 drop together and later return to 4, so it
+  may be a shared/state value, not per-player lives: UNCONFIRMED. Many 0x0C5F8xxx 2 -> 1 bytes (object
+  pool) also drop. Blocker: run_headless --png writes all-black frames (every frame, with or without
+  --png-range): fix that first, then confirm with screenshots, or ask the user to watch the address in
+  MAME's debugger while losing a life. Dumps are 128 MB each (whole 0x8000000 map): use few frames.
 * **Requested: optional gamepad rumble when the player is hit** (config + menu toggle, SDL_RumbleGamepad
   on that player's pad). Needs the per-player lives (or death flag) RAM address: find it by a RAM diff
   around a death (run_headless with an input file that dies, or a MAME cheat/watch), then check per frame.

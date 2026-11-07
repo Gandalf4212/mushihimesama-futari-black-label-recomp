@@ -73,27 +73,30 @@ static int move(Menu *m, int d) { m->sel = (m->sel + I_COUNT + d) % I_COUNT; ret
  * One row per action. While a row waits for input, a key binds a key (up to two per action) and a pad
  * button binds the pad (button rows only; both pads share the pad mapping, directions are always
  * d-pad + left stick). Delete clears a row's keys, X (pad) clears its pad button. */
-enum { C_RESET = ACT_COUNT, C_BACK, C_ROWS };
+enum { C_RESET = 0, C_FIRST = 1, C_BACK = ACT_COUNT + 1, C_ROWS };   /* row 0 = reset, then the actions */
+#define ROW_ACT(r) ((r) - C_FIRST)   /* row -> action (valid for C_FIRST <= r < C_BACK) */
 
-static int pad_slot(int r) { return r < 2 * ACT_PER_PLAYER ? r % ACT_PER_PLAYER : -1; }   /* -1: keys only */
+static int pad_slot(int r) { int a = ROW_ACT(r); return r >= C_FIRST && a < 2 * ACT_PER_PLAYER ? a % ACT_PER_PLAYER : -1; }   /* -1: keys only */
 
-static void crow_label(int r, char *out, size_t n)
+static void crow_label(int row, char *out, size_t n)
 {
+    if (row == C_RESET || row == C_BACK) { snprintf(out, n, row == C_RESET ? "RESET TO DEFAULTS" : "BACK"); return; }
+    int r = ROW_ACT(row);
     static const char *act[ACT_PER_PLAYER] = { "UP", "DOWN", "LEFT", "RIGHT", "BUTTON 1", "BUTTON 2", "BUTTON 3", "BUTTON 4", "START", "COIN" };
     if (r < 2 * ACT_PER_PLAYER) snprintf(out, n, "P%d %s", r / ACT_PER_PLAYER + 1, act[r % ACT_PER_PLAYER]);
     else if (r == ACT_SERVICE) snprintf(out, n, "SERVICE");
     else if (r == ACT_TEST) snprintf(out, n, "TEST");
-    else snprintf(out, n, r == C_RESET ? "RESET TO DEFAULTS" : "BACK");
 }
 
-static void crow_value(const Config *c, int r, char *out, size_t n)
+static void crow_value(const Config *c, int row, char *out, size_t n)
 {
     out[0] = 0;
-    if (r >= ACT_COUNT) return;
+    if (row < C_FIRST || row >= C_BACK) return;
+    int r = ROW_ACT(row);
     const char *a = c->key[r][0] ? SDL_GetScancodeName((SDL_Scancode)c->key[r][0]) : "";
     const char *b = c->key[r][1] ? SDL_GetScancodeName((SDL_Scancode)c->key[r][1]) : "";
     char pad[48] = "";
-    int ps = pad_slot(r);
+    int ps = pad_slot(row);
     if (ps >= 0) {
         char p0[24], p1[24]; pad_bind_name(c->pad[ps][0], p0, 24); pad_bind_name(c->pad[ps][1], p1, 24);
         snprintf(pad, sizeof pad, " | PAD %s%s%s", p0, *p0 && *p1 ? " / " : "", *p0 || *p1 ? p1 : "-");
@@ -103,7 +106,7 @@ static void crow_value(const Config *c, int r, char *out, size_t n)
 
 static int controls_event(Menu *m, Config *c, const SDL_Event *e)
 {
-    int r = m->csel;
+    int row = m->csel, r = ROW_ACT(row);          /* r: action, valid for action rows */
     if (m->capture) {
         if (e->type == SDL_EVENT_KEY_DOWN && !e->key.repeat) {
             SDL_Scancode sc = e->key.scancode;
@@ -116,7 +119,7 @@ static int controls_event(Menu *m, Config *c, const SDL_Event *e)
                    (e->type == SDL_EVENT_GAMEPAD_AXIS_MOTION && (e->gaxis.value > 24000 || e->gaxis.value < -24000))) {
             int code = e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN ? 1 + e->gbutton.button
                                                                  : PAD_AXIS + 2 * e->gaxis.axis + (e->gaxis.value < 0);
-            int ps = pad_slot(r);
+            int ps = pad_slot(row);
             if (ps >= 0) {
                 for (int j = 0; j < PAD_COUNT; j++)                     /* one input drives one action */
                     for (int k = 0; k < 2; k++) if (c->pad[j][k] == code) c->pad[j][k] = 0;
@@ -157,12 +160,12 @@ static int controls_event(Menu *m, Config *c, const SDL_Event *e)
     }
     if (mv) m->csel = (m->csel + C_ROWS + mv) % C_ROWS;
     if (back) { m->page = 0; m->capture = 0; }
-    if (clr_keys && r < ACT_COUNT) { c->key[r][0] = c->key[r][1] = 0; m->dirty = 1; }
-    if (clr_pad && pad_slot(r) >= 0) { c->pad[pad_slot(r)][0] = c->pad[pad_slot(r)][1] = 0; m->dirty = 1; }
+    if (clr_keys && row >= C_FIRST && row < C_BACK) { c->key[r][0] = c->key[r][1] = 0; m->dirty = 1; }
+    if (clr_pad && pad_slot(row) >= 0) { c->pad[pad_slot(row)][0] = c->pad[pad_slot(row)][1] = 0; m->dirty = 1; }
     if (act) {
-        if (r < ACT_COUNT) m->capture = 1;
-        else if (r == C_RESET) { config_default_controls(c); m->dirty = 1; }
-        else m->page = 0;
+        if (row == C_RESET) { config_default_controls(c); m->dirty = 1; }
+        else if (row == C_BACK) m->page = 0;
+        else m->capture = 1;
     }
     return 0;
 }
