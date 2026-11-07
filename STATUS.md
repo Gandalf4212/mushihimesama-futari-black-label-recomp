@@ -16,6 +16,13 @@
   Cause: core/frontend/input.c opened the same controller twice (explicit open at startup + SDL's
   CONTROLLERDEVICEADDED for already-connected pads), so one pad drove both players' inputs incl.
   Start, and free play coined + started both. Now an already-open pad is ignored.
+* **test13 (2026-11-06): first-run ROM finder + JPEG artwork.** core/frontend/romfind.c: looks for <set>/,
+  roms/<set>/, <set>.zip, roms/<set>.zip, <set>.7z, roms/<set>.7z; else a message box (Choose ROM file /
+  folder / Quit) + SDL3 open dialogs. Zip: our own reader + inflate (tested: all 4 ROMs byte-identical from
+  a deflate zip, 1.6 s). 7z: Windows %SystemRoot%\System32\tar.exe (libarchive), untested here; on failure
+  the dialog asks again. Archives extract to assets/_rom (deleted after setup). image.c: PNG/BMP via
+  SDL3, JPEG and other formats via WIC on Windows (links ole32, uuid, windowscodecs). User on test12:
+  artwork pack looks good. Artwork/layout files are third-party: never commit or ship them.
 * **test12 (2026-11-06): artwork packs.** core/frontend/layout.c reads MAME .lay bezel packs (elements with
   one image; views with screen/backdrop/overlay/bezel bounds; drawn backdrop, screen, overlay = MOD
   multiply, bezel = alpha; the view's box is fit to the output and the game goes in its screen rect).

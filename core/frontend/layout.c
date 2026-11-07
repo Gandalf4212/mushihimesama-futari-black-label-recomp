@@ -1,5 +1,6 @@
 /* MAME .lay subset reader (see layout.h). GPL-2.0-or-later. */
 #include "layout.h"
+#include "image.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -105,7 +106,7 @@ SDL_Texture *layout_tex(Layout *l, SDL_Renderer *r, int elem)
     LayElem *e = &l->elem[elem];
     if (e->tex || e->tried) return e->tex;
     e->tried = 1;
-    SDL_Surface *s = SDL_LoadPNG(e->file);
+    SDL_Surface *s = image_load(e->file);
     if (!s) { fprintf(stderr, "artwork %s: %s\n", e->file, SDL_GetError()); return NULL; }
     e->tex = SDL_CreateTextureFromSurface(r, s);
     SDL_DestroySurface(s);

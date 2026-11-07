@@ -107,7 +107,7 @@ int config_save(const Config *c, const char *path)
     fprintf(f, "# Settings. Command-line flags override these (see README.txt).\n\n");
     fprintf(f, "[video]\norientation = \"%s\"   # yoko | tate-cw | tate-ccw\nscale = %d             # 0 = largest that fits\nfullscreen = %s\nhud = %s             # performance overlay (F10 toggles)\nvsync = %s           # tear-free presentation; game speed is paced separately\n"
                "scaling = \"%s\"      # fit (largest, keeps aspect) | integer\nshader = \"%s\"       # none | sharp | crt | crt-curved\n"
-               "bezel = %d            # Yoko: 0 off, 1 ours, 2 = artwork view 1, 3 = view 2, ...\nartwork = \"%s\"       # MAME .lay bezel pack or PNG overlay (empty: Bezel/default.lay if present)\n"
+               "bezel = %d            # Yoko: 0 off, 1 ours, 2 = artwork view 1, 3 = view 2, ...\nartwork = \"%s\"       # MAME .lay bezel pack or PNG/JPG overlay (empty: Bezel/default.lay if present)\n"
                "uncapped = %s        # benchmark: present as fast as possible (game still runs at 60.024 Hz)\n\n",
             o[c->orientation], c->scale, c->fullscreen ? "true" : "false", c->hud ? "true" : "false", c->vsync ? "true" : "false",
             c->scaling == SCALING_INTEGER ? "integer" : "fit", (const char *[]){"none", "sharp", "crt", "crt-curved"}[c->shader],

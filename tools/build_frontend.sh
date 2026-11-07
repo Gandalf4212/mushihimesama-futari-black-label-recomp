@@ -25,7 +25,7 @@ for p in sorted(glob.glob(sys.argv[1] + '/*_frag.spv')):
     print(f'static const size_t {n}_spv_len = {len(d)};')
 PY
 CXXSRC="core/sound/ymz770.cpp core/sound/mpeg_audio.cpp"
-SRC="core/frontend/main_sdl.c core/frontend/present.c core/frontend/layout.c core/frontend/config.c core/frontend/input.c core/frontend/hud.c core/frontend/menu.c core/runtime/cv1k.c core/runtime/timing.c core/runtime/dispatch.c core/render/blit_ref.c core/sh3/sh3_core.c"
+SRC="core/frontend/main_sdl.c core/frontend/present.c core/frontend/layout.c core/frontend/image.c core/frontend/romfind.c core/frontend/config.c core/frontend/input.c core/frontend/hud.c core/frontend/menu.c core/runtime/cv1k.c core/runtime/timing.c core/runtime/dispatch.c core/render/blit_ref.c core/sh3/sh3_core.c"
 if [ "$TARGET" = windows ]; then
   CC=x86_64-w64-mingw32-gcc
   mkdir -p "$OUT/obj"
@@ -33,7 +33,7 @@ if [ "$TARGET" = windows ]; then
   for f in $SRC; do $CC -O2 -w -Ibuild -I"$B" -Icore/frontend -I"$SDLW/include" -c $f -o "$OUT/obj/m_$(basename $f).o"; done
   for f in $CXXSRC; do x86_64-w64-mingw32-g++ -std=c++20 -O2 -w -c $f -o "$OUT/obj/m_$(basename $f).o"; done
   x86_64-w64-mingw32-g++ -o "$OUT/$SET.exe" "$OUT"/obj/*.o \
-      -L"$SDLW/lib" -lmingw32 -lSDL3 -mwindows -static-libgcc -static-libstdc++
+      -L"$SDLW/lib" -lmingw32 -lSDL3 -lole32 -luuid -lwindowscodecs -mwindows -static-libgcc -static-libstdc++
   cp "$SDLW/bin/SDL3.dll" "$OUT/"
 else
   mkdir -p "$OUT/obj"

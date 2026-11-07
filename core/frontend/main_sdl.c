@@ -26,6 +26,7 @@
 #include "hud.h"
 #include "menu.h"
 #include "present.h"
+#include "romfind.h"
 #include "input.h"   /* generated per game: GAME_SET, GAME_TITLE, GAME_RAM_SIZE, GAME_MAIN_ENTRY, GAME_U4, GAME_U2 */
 
 static BlitRef g_blit;
@@ -110,11 +111,9 @@ int main(int argc, char **argv)
     Orientation orient = cfg.orientation; int scale = cfg.scale, fullscreen = cfg.fullscreen, slowdown = cfg.slowdown;
     FILE *probe = fopen("assets/program.bin", "rb");
     if (probe) fclose(probe);
-    else if (setup(GAME_SET) != 0 && setup("roms/" GAME_SET) != 0) {   /* first run: build assets/ from the ROM */
-        SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, GAME_TITLE,
-            "First run: put your " GAME_SET " ROM files (" GAME_U4 ", " GAME_U2 ") in a folder named \""
-            GAME_SET "\" next to this program, then start it again.\nAfter that the ROM files are no longer needed.", NULL);
-        return 1;
+    else {                                       /* first run: build assets/ from the ROM set (folder, zip, 7z or picker) */
+        SDL_Init(SDL_INIT_VIDEO);
+        if (rom_setup(setup) != 0) return 1;
     }
     if (!cv1k_init(&g_m, "assets/program.bin", "assets/nand.bin", GAME_RAM_SIZE)) {
         SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, GAME_TITLE, "Could not load assets/. Delete the assets folder and start again.", NULL);

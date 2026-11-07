@@ -2,6 +2,7 @@
  * at build time into shaders_spv.h. SDL3's GPU renderer runs them as custom render states.
  * GPL-2.0-or-later. */
 #include "present.h"
+#include "image.h"
 #include <math.h>
 #include <string.h>
 #include <stdio.h>
@@ -65,7 +66,7 @@ void present_load_bezel(Presenter *p, Config *c)
         if (c->bezel - 1 > c->artwork_views) c->bezel = 1;
         return;
     }
-    SDL_Surface *s = n > 4 && !SDL_strcasecmp(path + n - 4, ".png") ? SDL_LoadPNG(path) : SDL_LoadBMP(path);
+    SDL_Surface *s = image_load(path);   /* PNG, BMP, JPEG (Windows) */
     if (!s) { fprintf(stderr, "artwork %s: %s\n", path, SDL_GetError()); return; }
     p->bezel_img = SDL_CreateTextureFromSurface(p->ren, s);
     SDL_DestroySurface(s);
