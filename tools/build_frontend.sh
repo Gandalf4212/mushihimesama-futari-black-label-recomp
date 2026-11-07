@@ -11,6 +11,8 @@ f = {reg['region']: reg['files'][0]['name'] for reg in r['regions']}
 print(f'#define GAME_SET "{g["set"]}"\n#define GAME_TITLE "{g["title"].split(" (")[0]}"')
 print(f'#define GAME_RAM_SIZE {int(g["ram_size"], 16)}u\n#define GAME_MAIN_ENTRY {g["boot"]["main_entry"]}u')
 print(f'#define GAME_U4 "{f["maincpu"]}"\n#define GAME_U2 "{f["nand"]}"')
+u4 = [x for reg in r['regions'] if reg['region'] == 'maincpu' for x in reg['files']][0]
+print(f'#define GAME_U4_CRC 0x{u4["crc32"]}u')
 if 'lives' in g: print(f'#define GAME_LIVES_P1 {g["lives"]["p1"]}u\n#define GAME_LIVES_P2 {g["lives"]["p2"]}u')
 if 'credits' in g: print(f'#define GAME_CREDITS {g["credits"]["addr"]}u')
 if 'idle' in g: print(f'#define GAME_IDLE_PC {g["idle"]["pc"]}u\n#define GAME_IDLE_RAM {g["idle"]["ram_var"]}u')
@@ -29,11 +31,16 @@ for p in sorted(glob.glob(sys.argv[1] + '/*_frag.spv')):
     print(f'static const size_t {n}_spv_len = {len(d)};')
 PY
 CXXSRC="core/sound/ymz770.cpp core/sound/mpeg_audio.cpp"
-SRC="core/frontend/main_sdl.c core/frontend/present.c core/frontend/layout.c core/frontend/image.c core/frontend/romfind.c core/frontend/config.c core/frontend/input.c core/frontend/hud.c core/frontend/menu.c core/runtime/cv1k.c core/runtime/timing.c core/runtime/dispatch.c core/render/blit_ref.c core/sh3/sh3_core.c"
+SRC="core/frontend/main_sdl.c core/frontend/present.c core/frontend/layout.c core/frontend/image.c core/frontend/romfind.c core/frontend/config.c core/frontend/input.c core/frontend/hud.c core/frontend/menu.c core/frontend/gamedll.c core/runtime/cv1k.c core/runtime/timing.c core/runtime/dispatch.c core/render/blit_ref.c core/sh3/sh3_core.c"
 if [ "$TARGET" = windows ]; then
   CC=x86_64-w64-mingw32-gcc
   mkdir -p "$OUT/obj"
-  ls "$B"/gen/*.c | xargs -P"$(nproc)" -I{} sh -c "$CC -O1 -w -Icore/sh3 -c {} -o $OUT/obj/\$(basename {}).o"
+  # game code -> game.dll (the exe has none of it; the player's PC builds assets/game.dll, see docs/builder-plan.md)
+  mkdir -p "$OUT/gen"; rm -f "$OUT"/obj/recomp_*.o   # (older builds linked the game code into the exe)
+  ls "$B"/gen/*.c | xargs -P"$(nproc)" -I{} sh -c "o=$OUT/gen/\$(basename {}).o; [ \$o -nt {} ] || $CC -O1 -w -Icore/sh3 -c {} -o \$o"   # skip up-to-date objects
+  U4CRC=$(sed -n 's/^#define GAME_U4_CRC \(0x[0-9a-fA-F]*\)u/\1/p' "$B/game_config.h")
+  $CC -O2 -w -DRECOMP_U4_CRC=${U4CRC}u -c core/runtime/recomp_dll.c -o "$OUT/gen/recomp_dll.o"
+  $CC -shared -o "$OUT/game.dll" "$OUT"/gen/*.o -static-libgcc -Wl,--exclude-all-symbols
   for f in $SRC; do $CC -O2 -w -Ibuild -I"$B" -Icore/frontend -I"$SDLW/include" -c $f -o "$OUT/obj/m_$(basename $f).o"; done
   for f in $CXXSRC; do x86_64-w64-mingw32-g++ -std=c++20 -O2 -w -c $f -o "$OUT/obj/m_$(basename $f).o"; done
   x86_64-w64-mingw32-g++ -o "$OUT/$SET.exe" "$OUT"/obj/*.o \

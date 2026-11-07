@@ -3,6 +3,9 @@
  * GPL-2.0-or-later. */
 #include "cv1k.h"
 #include "dispatch.h"
+#ifdef USE_GAMEDLL
+#include "../frontend/gamedll.h"
+#endif
 #include "../render/blit_ref.h"
 #include "../render/png.h"
 
@@ -128,7 +131,11 @@ int main(int argc, char **argv)
             if (dump_dir) { char key[32]; snprintf(key, sizeof key, ",%llu,", (unsigned long long)m.frame); if (strstr(dump_list, key)) { char path[512]; snprintf(path, sizeof path, "%s/ram_%05llu.bin", dump_dir, (unsigned long long)m.frame); FILE *f = fopen(path, "wb"); if (f) { fwrite(m.ram, 1, m.ram_size, f); fclose(f); } } } }
     }
     printf("boot reached main entry at frame %llu (cycle %llu)\n", (unsigned long long)m.frame, (unsigned long long)s->cycles);
-    if (!interp) dispatch_init(m.ram_size);
+    #ifdef USE_GAMEDLL   /* Windows test build: game code from game.dll, as the frontend loads it */
+    if (!interp) { const RecompEntry *t; unsigned n; char why[300]; if (!game_code_load(&t, &n, why, sizeof why)) { fprintf(stderr, "%s\n", why); return 1; } dispatch_init(m.ram_size, t, n); }
+#else
+    if (!interp) dispatch_init(m.ram_size, recomp_table, recomp_table_count);
+#endif
     clock_t t0 = clock();
     uint64_t last_blit = 0, last_nand = 0;
     while (m.frame < frames) {

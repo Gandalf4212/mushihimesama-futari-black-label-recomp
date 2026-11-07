@@ -28,7 +28,8 @@
 #include "menu.h"
 #include "present.h"
 #include "romfind.h"
-#include "input.h"   /* generated per game: GAME_SET, GAME_TITLE, GAME_RAM_SIZE, GAME_MAIN_ENTRY, GAME_U4, GAME_U2 */
+#include "input.h"
+#include "gamedll.h"   /* generated per game: GAME_SET, GAME_TITLE, GAME_RAM_SIZE, GAME_MAIN_ENTRY, GAME_U4, GAME_U2 */
 
 static BlitRef g_blit;
 static CV1K g_m;
@@ -133,7 +134,15 @@ int main(int argc, char **argv)
 #endif
     if (!slowdown) cv1k_set_timing(&g_m, 0);
     blit_ref_init(&g_blit); g_m.blit.on_exec = on_exec;
-    dispatch_init(g_m.ram_size);
+    {   /* game code: assets/game.dll on Windows (built on this PC), else linked in; none = interpreter */
+        const RecompEntry *tab; unsigned n; char why[300];
+        if (!game_code_load(&tab, &n, why, sizeof why)) {
+            char msg[512];
+            snprintf(msg, sizeof msg, "The compiled game code could not be loaded (%s).\n\nThe game will run on the interpreter, which is too slow for full speed.", why);
+            SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_WARNING, GAME_TITLE, msg, NULL);
+        }
+        dispatch_init(g_m.ram_size, tab, n);
+    }
 
     SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "256");   /* small device buffer: low latency */
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_AUDIO)) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); return 1; }

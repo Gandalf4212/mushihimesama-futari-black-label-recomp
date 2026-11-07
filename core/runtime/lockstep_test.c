@@ -28,7 +28,7 @@ int main(int argc, char **argv)
     SH3 sb = sa; sb.bus.ctx = &b;
     uint64_t c0 = sa.cycles;
 
-    dispatch_init(b.ram_size);
+    dispatch_init(b.ram_size, recomp_table, recomp_table_count);
     dispatch_run(&sb, c0 + cycles, stop);                                   /* recompiled */
     while (sa.cycles < sb.cycles) sh3_step(&sa);                             /* reference */
 

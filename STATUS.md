@@ -3,7 +3,7 @@
 ## START HERE (handoff 2026-11-07)
 
 ### Where we are
-* Latest test build: **F:\claude2\fbl\futaribl_windows_test25.zip** (private: it contains the recompiled game
+* Latest test build: **F:\claude2\fbl\futaribl_windows_test26.zip** (private: it contains the recompiled game
   code, see "Builder"). User-confirmed working on Windows: SDL3 frontend, Vulkan shaders (none / sharp /
   crt / crt-curved), our Yoko bezel + MAME .lay artwork packs, fit / integer scaling, uncapped benchmark
   HUD, first-run ROM import (folder / zip / 7z / picker) with the CRC check screen, key + pad remapping
@@ -27,6 +27,21 @@
   playing) -> credit byte written back to 0. Lives bytes can't tell the attract demo from play (P1 lives
   = 3 in the demo too). To confirm: one Start starts from attract, P2 join and continue still work,
   in-game Start leaves CREDIT 0.
+
+* **test25: user-confirmed 2026-11-07** (free play: one Start starts; no stray credits).
+* **test26 (2026-11-07): builder step (a) done, to confirm.** The Windows exe has no game code any more
+  (584 KB, was 124 MB): the generated code is in game.dll, loaded from assets/game.dll, else game.dll next
+  to the exe (test builds ship it there). ABI: core/runtime/recomp_abi.h (RECOMP_ABI 1; host callback
+  table for the 6 helpers the generated C calls: sh3_miss, sh3_miss_at, sh3_bad_slot, sh3_set_sr,
+  sh3_div1, sh3_macl; DLL info = abi, sizeof(SH3), u4 CRC, table). core/runtime/recomp_dll.c is linked
+  into the DLL (forwarders + exported recomp_dll_init); generated C unchanged. core/frontend/gamedll.c:
+  LoadLibrary + checks; on failure a warning box and the interpreter. dispatch_init(ram, table, count).
+  Checked: Windows run_headless (-DUSE_GAMEDLL, under wine) through game.dll vs Linux static, stage1
+  inputs, 3000 frames: per-frame watch log and PNGs at 1000/2000/3000 identical. Packaging:
+  `tools/package_release.sh <set> out.zip --with-game-code` adds game.dll (private test builds only);
+  without the flag the zip has none of Cave's code. build_frontend.sh skips up-to-date gen objects
+  (relink ~20 s). **To confirm: test26 plays as test25 (speed, no warning box).**
+  Next: step (b), port discover.py + gen_c.py + isa.py to C, output byte-identical.
 
 ### Next, in order (target v0.8.0)
 1. **Builder (the v0.8.0 blocker)**: the public release must not contain Cave's code. Plan in
