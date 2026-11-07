@@ -1,9 +1,9 @@
 # Status
 
-## START HERE (handoff 2026-11-06, end of day)
+## START HERE (handoff 2026-11-07)
 
 ### Where we are
-* Latest test build: **F:\claude2\fbl\futaribl_windows_test23.zip** (private: it contains the recompiled game
+* Latest test build: **F:\claude2\fbl\futaribl_windows_test25.zip** (private: it contains the recompiled game
   code, see "Builder"). User-confirmed working on Windows: SDL3 frontend, Vulkan shaders (none / sharp /
   crt / crt-curved), our Yoko bezel + MAME .lay artwork packs, fit / integer scaling, uncapped benchmark
   HUD, first-run ROM import (folder / zip / 7z / picker) with the CRC check screen, key + pad remapping
@@ -15,12 +15,18 @@
   user's (LaunchBox "Cave Shoot Part 1": copy default.lay, vert_screen_bezel.png, vert_screen_mask.png,
   04.png -> art1.png into Bezel\); SDL3 GPU = Vulkan only.
 
-* **test24 (2026-11-06, late):** user: with the ROMs (zip, 7z or folder) next to the exe, the import built
-  assets/ and then the "ROM set was not found" dialog still appeared. Root cause not found by reading
-  romfind.c (every success path returns 0); added a guard: assets_ready() (program.bin + nand.bin) is
-  checked before the dialog and after a pick. **To do: confirm on test24; if the dialog still shows,
-  find the real cause** (suspects: check_screen() returning 0 on the keypress that closed it, or
-  setup() failing after creating assets/).
+* **test24: user-confirmed 2026-11-07** (ROM import no longer shows the "not found" dialog; the guard
+  stays, root cause never found).
+* **test25 (2026-11-07): free play fixed (to confirm).** User on test24: Start in attract added a coin but
+  didn't start (fire doesn't start either: Cave games start on Start only); a 2nd Start added another
+  coin and started; Start in game kept adding coins. Measured with run_headless input scripts (coin at
+  2200): the credit byte (**0x0C0601E7**, game.json "credits", found by RAM diff) counts at +5 frames,
+  and a Start less than 10 frames after the coin is ignored; the old trick pressed Start at +8. Now
+  (input.c): Start with 0 credits -> coin 4 frames, wait for credit > 0, +8 frames, Start 6 frames;
+  credit already in -> Start passes through; our coin still unused 60 frames after our Start (Start while
+  playing) -> credit byte written back to 0. Lives bytes can't tell the attract demo from play (P1 lives
+  = 3 in the demo too). To confirm: one Start starts from attract, P2 join and continue still work,
+  in-game Start leaves CREDIT 0.
 
 ### Next, in order (target v0.8.0)
 1. **Builder (the v0.8.0 blocker)**: the public release must not contain Cave's code. Plan in

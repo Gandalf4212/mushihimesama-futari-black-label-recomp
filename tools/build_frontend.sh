@@ -12,6 +12,7 @@ print(f'#define GAME_SET "{g["set"]}"\n#define GAME_TITLE "{g["title"].split(" (
 print(f'#define GAME_RAM_SIZE {int(g["ram_size"], 16)}u\n#define GAME_MAIN_ENTRY {g["boot"]["main_entry"]}u')
 print(f'#define GAME_U4 "{f["maincpu"]}"\n#define GAME_U2 "{f["nand"]}"')
 if 'lives' in g: print(f'#define GAME_LIVES_P1 {g["lives"]["p1"]}u\n#define GAME_LIVES_P2 {g["lives"]["p2"]}u')
+if 'credits' in g: print(f'#define GAME_CREDITS {g["credits"]["addr"]}u')
 if 'idle' in g: print(f'#define GAME_IDLE_PC {g["idle"]["pc"]}u\n#define GAME_IDLE_RAM {g["idle"]["ram_var"]}u')
 snd = [reg['files'] for reg in r['regions'] if reg['region'] == 'ymz770']
 roms = [x for reg in r['regions'] for x in reg['files']]

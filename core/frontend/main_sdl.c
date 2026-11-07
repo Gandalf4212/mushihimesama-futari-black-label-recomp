@@ -212,7 +212,13 @@ int main(int argc, char **argv)
         for (ran = 0; !menu.open && ran < (sync_display ? 1 : 3) && due <= now; ran++, due += period) {
             if (ran) SDL_PumpEvents();
             input_frame(&in, &cfg, cfg.rotate_controls && orient == ROT_TATE_CW, cfg.rotate_controls && orient == ROT_TATE_CCW,
-                        &g_m.in.c, &g_m.in.d, &g_m.in.l, &g_m.in.f);
+                        &g_m.in.c, &g_m.in.d, &g_m.in.l, &g_m.in.f,
+#ifdef GAME_CREDITS
+                        &g_m.ram[GAME_CREDITS & (g_m.ram_size - 1)]
+#else
+                        NULL
+#endif
+                        );
             while (s->cycles < g_m.next_vsync) {               /* same order as run_headless (verified vs MAME) */
                 cv1k_check_irq(&g_m);
                 { uint64_t te = cv1k_next_event(&g_m); s->event_at = te < g_m.next_vsync ? te : g_m.next_vsync; }

@@ -52,7 +52,8 @@ static uint8_t rotate_dirs(uint8_t b, int tate_cw, int tate_ccw)
     return o | (r ? UP : 0) | (l ? DOWN : 0) | (u ? LEFT : 0) | (d ? RIGHT : 0);
 }
 
-void input_frame(Input *in, const Config *cfg, int rot_cw, int rot_ccw, uint8_t *port_c, uint8_t *port_d, uint8_t *port_l, uint8_t *port_f)
+void input_frame(Input *in, const Config *cfg, int rot_cw, int rot_ccw, uint8_t *port_c, uint8_t *port_d, uint8_t *port_l, uint8_t *port_f,
+                 uint8_t *credits)
 {
     const bool *k = SDL_GetKeyboardState(NULL);
     int freeplay = cfg->freeplay;
@@ -71,17 +72,30 @@ void input_frame(Input *in, const Config *cfg, int rot_cw, int rot_ccw, uint8_t 
     p1 = rotate_dirs(p1, rot_cw, rot_ccw);
     p2 = rotate_dirs(p2, rot_cw, rot_ccw);
 
-    /* free play: a Start press first inserts a coin (held 4 frames), then presses Start (4 frames) */
+    /* Free play (the board has none): a Start press with no credit inserts a coin, waits until the game
+     * has counted it (credit byte > 0) plus 8 frames, then presses Start; the game ignores a Start that
+     * comes less than ~10 frames after the coin (measured with run_headless). With a credit already in,
+     * Start passes straight through. If the coin we inserted is still unused 60 frames after our Start
+     * (Start pressed while that player is already playing), the credit is taken back, so no stray
+     * credits build up. Without a credit address: fixed timing (coin 4, wait 16, start 6). */
+    enum { FP_IDLE, FP_COIN, FP_WAIT, FP_GAP, FP_START, FP_CHECK };
     uint8_t c = 0;
     for (int p = 0; p < 2; p++) {
-        int st = p ? st2 : st1;
-        if (freeplay && st && !in->start_held[p] && !in->fp_timer[p]) in->fp_timer[p] = 12;
+        int st = p ? st2 : st1, press = st && !in->start_held[p];
         in->start_held[p] = st;
-        if (in->fp_timer[p]) {
-            int t = in->fp_timer[p]--;
-            if (t > 8) c |= p ? C_COIN2 : C_COIN1;      /* frames 12..9: coin */
-            else if (t <= 4) c |= p ? C_START2 : C_START1; /* frames 4..1: start */
-        } else if (st) c |= p ? C_START2 : C_START1;
+        int *s = &in->fp_state[p], *t = &in->fp_t[p];
+        int cred = credits ? *credits : 0;
+        if (*s == FP_IDLE) {
+            if (freeplay && press && cred == 0) { *s = FP_COIN; *t = 4; }
+            else if (st) c |= p ? C_START2 : C_START1;
+        }
+        switch (*s) {
+        case FP_COIN:  c |= p ? C_COIN2 : C_COIN1; if (--*t == 0) { *s = credits ? FP_WAIT : FP_GAP; *t = credits ? 30 : 16; } break;
+        case FP_WAIT:  if (cred > 0) { *s = FP_GAP; *t = 8; } else if (--*t == 0) *s = FP_IDLE; break;   /* coin not taken (test mode...) */
+        case FP_GAP:   if (--*t == 0) { *s = FP_START; *t = 6; } break;
+        case FP_START: c |= p ? C_START2 : C_START1; if (--*t == 0) { *s = credits ? FP_CHECK : FP_IDLE; *t = 60; } break;
+        case FP_CHECK: if (cred == 0) *s = FP_IDLE; else if (--*t == 0) { if (cred == 1) *credits = 0; *s = FP_IDLE; } break;
+        }
     }
     if (coin1) c |= C_COIN1;
     if (coin2) c |= C_COIN2;

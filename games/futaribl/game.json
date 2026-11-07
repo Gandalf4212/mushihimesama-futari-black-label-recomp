@@ -3,6 +3,7 @@
   "title": "Mushihime-Sama Futari Black Label - Another Ver (World, 2009/11/27 INTERNATIONAL BL)",
   "board": "CV1000-B",
   "ram_size": "0x800000",
+  "credits": { "addr": "0x0C0601E7", "_note": "byte, credit count; found 2026-11-07 by run_headless RAM diff (coins at 1500/1700 -> 0,1,2); a Start <10 frames after the coin is ignored" },
   "lives": { "p1": "0x0C383E4F", "p2": "0x0C383F1B", "_note": "byte, lives incl. the ship in play; player structs 0xCC apart; found by RAM diff of run_headless dumps 2026-11-06" },
   "rotation": "ROT270",
   "default_display": "yoko",
