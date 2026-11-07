@@ -104,6 +104,7 @@ int main(int argc, char **argv)
         if (!strcmp(argv[i], "--shot") && i + 2 < argc) { shot_frame = atol(argv[i + 1]); shot_path = argv[i + 2]; }   /* debug */
         if (!strcmp(argv[i], "--shot-menu")) shot_menu = 1;   /* debug: open the menu before the shot */
     }
+    rom_chdir_base();                            /* work next to the program, wherever it was started from */
     Config cfg; config_defaults(&cfg);
     if (!config_load(&cfg, cfg_path)) config_save(&cfg, cfg_path);   /* first run: write the defaults */
     int bad = config_args(&cfg, argc, argv);

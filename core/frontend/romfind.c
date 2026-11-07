@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdarg.h>
 #include "game_config.h"
 #ifdef _WIN32
 #include <windows.h>
@@ -17,6 +18,7 @@
 #define MKDIR(p) _mkdir(p)
 #else
 #include <sys/stat.h>
+#include <unistd.h>
 #define MKDIR(p) mkdir((p), 0755)
 #endif
 
@@ -29,7 +31,25 @@ static const char *wanted[] = { GAME_U4, GAME_U2,
 };
 #define NWANTED ((int)(sizeof wanted / sizeof wanted[0]))
 
-static int exists(const char *p) { FILE *f = fopen(p, "rb"); if (f) fclose(f); return f != NULL; }
+static int exists(const char *p) { SDL_PathInfo pi; return SDL_GetPathInfo(p, &pi) && pi.type == SDL_PATHTYPE_FILE; }
+
+/* romfind.log next to the program: what was tried and why it failed */
+static void logf_(const char *fmt, ...)
+{
+    static FILE *lg; if (!lg) lg = fopen("romfind.log", "w");
+    if (!lg) return;
+    va_list ap; va_start(ap, fmt); vfprintf(lg, fmt, ap); va_end(ap); fputc('\n', lg); fflush(lg);
+}
+
+void rom_chdir_base(void)
+{
+    const char *bp = SDL_GetBasePath(); if (!bp) return;
+#ifdef _WIN32
+    wchar_t w[1024]; if (MultiByteToWideChar(CP_UTF8, 0, bp, -1, w, 1024)) _wchdir(w);
+#else
+    if (chdir(bp)) {}
+#endif
+}
 
 /* ---------------- inflate (RFC 1951), our own ---------------- */
 typedef struct { const uint8_t *in; size_t inlen, ip; uint32_t bb; int bc; uint8_t *out; size_t outlen, op; int err; } Inf;
@@ -150,49 +170,59 @@ static const char *base_name(const char *p)
     return b;
 }
 
+static int rd_at(SDL_IOStream *f, Sint64 off, void *buf, size_t n)
+{
+    return SDL_SeekIO(f, off, SDL_IO_SEEK_SET) == off && SDL_ReadIO(f, buf, n) == n;
+}
+
 static int zip_extract(const char *arc, const char *outdir)
 {
-    FILE *f = fopen(arc, "rb"); if (!f) return 0;
-    fseek(f, 0, SEEK_END); long sz = ftell(f);
-    long tail = sz < 66000 ? sz : 66000;
+    SDL_IOStream *f = SDL_IOFromFile(arc, "rb");
+    if (!f) { logf_("zip %s: cannot open (%s)", arc, SDL_GetError()); return 0; }
+    Sint64 sz = SDL_GetIOSize(f);
+    Sint64 tail = sz < 66000 ? sz : 66000;
     uint8_t *t = malloc((size_t)tail);
-    fseek(f, sz - tail, SEEK_SET);
-    if (!t || fread(t, 1, (size_t)tail, f) != (size_t)tail) { free(t); fclose(f); return 0; }
-    long eocd = -1;
-    for (long i = tail - 22; i >= 0; i--) if (rd32(t + i) == 0x06054b50) { eocd = i; break; }
-    if (eocd < 0) { free(t); fclose(f); return 0; }
+    if (!t || !rd_at(f, sz - tail, t, (size_t)tail)) { logf_("zip %s: read error (size %lld)", arc, (long long)sz); free(t); SDL_CloseIO(f); return 0; }
+    Sint64 eocd = -1;
+    for (Sint64 i = tail - 22; i >= 0; i--) if (rd32(t + i) == 0x06054b50) { eocd = i; break; }
+    if (eocd < 0) { logf_("zip %s: no end-of-directory record", arc); free(t); SDL_CloseIO(f); return 0; }
     uint32_t nent = rd16(t + eocd + 10), cdsize = rd32(t + eocd + 12), cdoff = rd32(t + eocd + 16);
     free(t);
-    uint8_t *cd = malloc(cdsize);
-    fseek(f, (long)cdoff, SEEK_SET);
-    if (!cd || fread(cd, 1, cdsize, f) != cdsize) { free(cd); fclose(f); return 0; }
+    logf_("zip %s: %u entries, directory %u bytes at %u", arc, nent, cdsize, cdoff);
+    uint8_t *cd = malloc(cdsize ? cdsize : 1);
+    if (!cd || !rd_at(f, cdoff, cd, cdsize)) { logf_("zip: cannot read the directory"); free(cd); SDL_CloseIO(f); return 0; }
     int got = 0;
     for (uint32_t i = 0, p = 0; i < nent && p + 46 <= cdsize; i++) {
-        if (rd32(cd + p) != 0x02014b50) break;
-        uint32_t method = rd16(cd + p + 10), csize = rd32(cd + p + 20), usize = rd32(cd + p + 24);
+        if (rd32(cd + p) != 0x02014b50) { logf_("zip: bad directory entry %u", i); break; }
+        uint32_t flags = rd16(cd + p + 8), method = rd16(cd + p + 10), csize = rd32(cd + p + 20), usize = rd32(cd + p + 24);
         uint32_t nl = rd16(cd + p + 28), el = rd16(cd + p + 30), cl = rd16(cd + p + 32), loff = rd32(cd + p + 42);
         char name[256]; size_t k = nl < 255 ? nl : 255; memcpy(name, cd + p + 46, k); name[k] = 0;
         p += 46 + nl + el + cl;
         int want = -1;
         for (int w = 0; w < NWANTED; w++) if (!SDL_strcasecmp(base_name(name), wanted[w])) want = w;
-        if (want < 0 || (method != 0 && method != 8)) continue;
+        logf_("  %s: method %u flags %x packed %u size %u%s", name, method, flags, csize, usize, want < 0 ? " (not needed)" : "");
+        if (want < 0) continue;
+        if ((method != 0 && method != 8) || (flags & 1)) { logf_("  unsupported (method %u%s)", method, flags & 1 ? ", encrypted" : ""); continue; }
         uint8_t lh[30];
-        fseek(f, (long)loff, SEEK_SET);
-        if (fread(lh, 1, 30, f) != 30 || rd32(lh) != 0x04034b50) continue;
-        fseek(f, (long)(loff + 30 + rd16(lh + 26) + rd16(lh + 28)), SEEK_SET);
+        if (!rd_at(f, loff, lh, 30) || rd32(lh) != 0x04034b50) { logf_("  bad local header"); continue; }
+        Sint64 data = (Sint64)loff + 30 + rd16(lh + 26) + rd16(lh + 28);
         uint8_t *in = malloc(csize ? csize : 1), *out = method == 0 ? in : malloc(usize ? usize : 1);
-        int ok = in && out && fread(in, 1, csize, f) == csize && (method == 0 ? csize == usize : inflate_all(in, csize, out, usize));
+        int ok = in && out && rd_at(f, data, in, csize);
+        if (!ok) logf_("  read failed");
+        else if (method == 8 && !inflate_all(in, csize, out, usize)) { ok = 0; logf_("  inflate failed"); }
         if (ok) {
             char op[1024]; snprintf(op, sizeof op, "%s/%s", outdir, wanted[want]);
-            FILE *o = fopen(op, "wb");
-            ok = o && fwrite(out, 1, usize, o) == usize;
-            if (o) fclose(o);
+            SDL_IOStream *o = SDL_IOFromFile(op, "wb");
+            ok = o && SDL_WriteIO(o, out, usize) == usize;
+            if (o) SDL_CloseIO(o);
+            if (!ok) logf_("  cannot write %s (%s)", op, SDL_GetError());
             got += ok;
-        } else fprintf(stderr, "zip: cannot read %s from %s\n", name, arc);
+        }
         if (out != in) free(out);
         free(in);
     }
-    free(cd); fclose(f);
+    free(cd); SDL_CloseIO(f);
+    logf_("zip: extracted %d of %d", got, NWANTED);
     return got;
 }
 
@@ -219,10 +249,11 @@ static int ends_with(const char *s, const char *e) { size_t a = strlen(s), b = s
 /* archive -> TMPDIR -> setup; extracted copies are removed afterwards */
 static int from_archive(const char *arc, int (*setup)(const char *))
 {
-    if (!exists(arc)) return 0;
+    if (!exists(arc)) { logf_("%s: not found", arc); return 0; }
     MKDIR("assets"); MKDIR(TMPDIR);
     int got = ends_with(arc, ".7z") ? sevenz_extract(arc, TMPDIR) : zip_extract(arc, TMPDIR);
     int ok = got >= 2 && setup(TMPDIR) == 0;
+    logf_("%s: %d files, setup %s", arc, got, ok ? "ok" : "failed");
     char p[1024];
     for (int w = 0; w < NWANTED; w++) { snprintf(p, sizeof p, "%s/%s", TMPDIR, wanted[w]); remove(p); }
 #ifdef _WIN32
@@ -278,7 +309,9 @@ int rom_setup(int (*setup)(const char *romdir))
         if (which == 1) SDL_ShowOpenFileDialog(picked, &k, NULL, filt, 2, NULL, false);
         else SDL_ShowOpenFolderDialog(picked, &k, NULL, NULL, false);
         while (!k.done) { SDL_Event e; while (SDL_PollEvent(&e)) {} SDL_Delay(10); }
+        rom_chdir_base();                                               /* the dialog may change the working folder */
         if (!k.path[0]) continue;                                       /* cancelled */
+        logf_("picked %s", k.path);
         if (from_path(k.path, setup)) return 0;
         msg = "That did not contain the " GAME_SET " ROMs (" GAME_U4 ", " GAME_U2 ").\n\n"
               "Choose " GAME_SET ".zip / .7z or the folder holding the ROM files.";

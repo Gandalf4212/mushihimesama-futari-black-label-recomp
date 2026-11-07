@@ -16,6 +16,10 @@
   Cause: core/frontend/input.c opened the same controller twice (explicit open at startup + SDL's
   CONTROLLERDEVICEADDED for already-connected pads), so one pad drove both players' inputs incl.
   Start, and free play coined + started both. Now an already-open pad is ignored.
+* **test14 (2026-11-06):** user's WinRAR zip was rejected on test13 (our inflate is fine: Python and Info-ZIP
+  zips -1/-6/-9 all decode byte-identical). Changes: working folder = program folder at start and after
+  the file dialog (rom_chdir_base), archive I/O through SDL_IOStream (UTF-8 paths), romfind.log written
+  next to the exe with every step. If it still fails: read romfind.log.
 * **test13 (2026-11-06): first-run ROM finder + JPEG artwork.** core/frontend/romfind.c: looks for <set>/,
   roms/<set>/, <set>.zip, roms/<set>.zip, <set>.7z, roms/<set>.7z; else a message box (Choose ROM file /
   folder / Quit) + SDL3 open dialogs. Zip: our own reader + inflate (tested: all 4 ROMs byte-identical from
