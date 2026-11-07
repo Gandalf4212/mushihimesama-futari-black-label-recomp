@@ -424,11 +424,11 @@ int rom_setup(int (*setup)(const char *romdir))
     if (g_quit) return 1;
 
     const char *msg = "The " GAME_SET " ROM set was not found.\n\nPut " GAME_SET ".zip, " GAME_SET ".7z or a folder named \""
-                      GAME_SET "\" next to this program, or choose it now.\nIt is only needed once: the game keeps what it needs in assets\\.";
+                      GAME_SET "\" next to this program,\nor pick a ROM archive (Zip / 7z...) or folder (Folder...) now.\nIt is only needed once: the game keeps what it needs in assets\\.";
     for (;;) {
         const SDL_MessageBoxButtonData btn[] = {
-            { SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 1, "Choose ROM file..." },
-            { 0, 2, "Choose ROM folder..." },
+            { SDL_MESSAGEBOX_BUTTON_RETURNKEY_DEFAULT, 1, "Zip / 7z..." },
+            { 0, 2, "Folder..." },
             { SDL_MESSAGEBOX_BUTTON_ESCAPEKEY_DEFAULT, 0, "Quit" } };
         SDL_MessageBoxData md = { SDL_MESSAGEBOX_INFORMATION, NULL, GAME_TITLE, msg, 3, btn, NULL };
         int which = 0;
