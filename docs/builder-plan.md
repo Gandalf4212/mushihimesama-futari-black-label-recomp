@@ -39,7 +39,7 @@ After the first run: `assets/` (as now) plus `assets/game.dll` (the compiled gam
 The second build pass is replaced by the shipped hints file (addresses found by running the game).
 
 ## Open questions (next session)
-- Size of discover.py / gen_c.py (C port vs embedded Python).
+- Translator size: discover.py 178 + gen_c.py 234 + isa.py 222 lines -> a C port (into the exe) is small; preferred over embedding Python.
 - w64devkit size after trimming (gcc, ld, as, headers only) and its licence notices to ship.
 - Exact runtime-helper ABI for generated code (what gen_c emits calls to).
 - Rebuild trigger: new release with a changed translator -> ABI/version bump -> rebuild prompt.
