@@ -35,7 +35,7 @@ typedef struct {
                                   for Bezel/default.lay or artwork/default.lay next to the program */
     int artwork_views;         /* runtime: views in the loaded .lay (not saved) */
     int uncapped;              /* [video] uncapped = false (benchmark: present as fast as possible; game stays 60.024 Hz) */
-    int rumble;                /* [input] rumble = 1 (0 off, 1 low, 2 high): pad rumble when that player loses a life */
+    int rumble[2];             /* [input] rumble_p1 / rumble_p2 = 0 (0 off, 1 low, 2 high): pad rumble when that player loses a ship */
     int key[ACT_COUNT][2];     /* [input] p1_up = "Up" ... : up to two SDL scancodes per action (0 = none) */
     int pad[PAD_COUNT][2];     /* [input] pad_up = "dpup, -lefty" ... : two pad inputs per action (0 = none) */
 } Config;

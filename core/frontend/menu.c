@@ -7,7 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 
-enum { I_ORIENT, I_SCALE, I_SCALING, I_SHADER, I_BEZEL, I_FULLSCREEN, I_VSYNC, I_UNCAPPED, I_RATE, I_SLOWDOWN, I_FREEPLAY, I_VOLUME, I_ROTCTL, I_RUMBLE, I_HUD,
+enum { I_ORIENT, I_SCALE, I_SCALING, I_SHADER, I_BEZEL, I_FULLSCREEN, I_VSYNC, I_UNCAPPED, I_RATE, I_SLOWDOWN, I_FREEPLAY, I_VOLUME, I_ROTCTL, I_RUMBLE1, I_RUMBLE2, I_HUD,
        I_CONTROLS, I_RESUME, I_QUIT, I_COUNT };
 
 void menu_init(Menu *m) { memset(m, 0, sizeof *m); }
@@ -30,7 +30,7 @@ static void value(const Config *c, int show_hud, int i, char *out, size_t n)
     case I_FREEPLAY: snprintf(out, n, "%s", c->freeplay ? "ON" : "OFF (COINS)"); break;
     case I_VOLUME: snprintf(out, n, "%d", c->volume); break;
     case I_ROTCTL: snprintf(out, n, "%s", c->rotate_controls ? "ON" : "OFF"); break;
-    case I_RUMBLE: { static const char *rm[] = {"OFF", "LOW", "HIGH"}; snprintf(out, n, "%s", rm[c->rumble]); break; }
+    case I_RUMBLE1: case I_RUMBLE2: { static const char *rm[] = {"OFF", "LOW", "HIGH"}; snprintf(out, n, "%s", rm[c->rumble[i - I_RUMBLE1]]); break; }
     case I_HUD: snprintf(out, n, "%s", show_hud ? "ON" : "OFF"); break;
     default: out[0] = 0;
     }
@@ -38,7 +38,7 @@ static void value(const Config *c, int show_hud, int i, char *out, size_t n)
 
 static const char *label[I_COUNT] = {
     "ORIENTATION", "WINDOW SCALE", "SCALING", "SHADER", "BEZEL", "FULLSCREEN", "VSYNC", "UNCAPPED FPS", "GAME SPEED", "SLOWDOWN", "FREE PLAY", "VOLUME",
-    "ROTATE CONTROLS", "RUMBLE", "PERFORMANCE HUD", "CONTROLS...", "RESUME", "QUIT"
+    "ROTATE CONTROLS", "RUMBLE P1", "RUMBLE P2", "PERFORMANCE HUD", "CONTROLS...", "RESUME", "QUIT"
 };
 
 /* dir = -1 / +1 (left / right), 0 = activate (Enter / A) */
@@ -59,7 +59,7 @@ static int change(Menu *m, Config *c, int *show_hud, int dir)
     case I_FREEPLAY: c->freeplay = !c->freeplay; break;
     case I_VOLUME: c->volume += 10 * d; if (c->volume < 0) c->volume = 0; if (c->volume > 100) c->volume = 100; break;
     case I_ROTCTL: c->rotate_controls = !c->rotate_controls; break;
-    case I_RUMBLE: c->rumble = (c->rumble + 3 + d) % 3; break;
+    case I_RUMBLE1: case I_RUMBLE2: { int *r = &c->rumble[m->sel - I_RUMBLE1]; *r = (*r + 3 + d) % 3; break; }
     case I_HUD: *show_hud = !*show_hud; c->hud = *show_hud; break;
     case I_CONTROLS: if (!dir) { m->page = 1; m->csel = 0; m->capture = 0; } return 0;
     case I_RESUME: if (!dir) { m->open = 0; return MENU_CH_CLOSED; } return 0;

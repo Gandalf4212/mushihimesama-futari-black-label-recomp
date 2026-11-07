@@ -66,8 +66,9 @@ UNCAPPED FPS     benchmark: draws as fast as possible; the game itself still run
 GAME SPEED       NATIVE 60.024 HZ (the board's rate), or DISPLAY REFRESH (one frame per refresh
                  on a 60 Hz display, like MAME's -syncrefresh)
 SLOWDOWN         ON = original arcade slowdown
-FREE PLAY, VOLUME, ROTATE CONTROLS (for Tate), RUMBLE (pad rumble when that player loses a ship: OFF /
-                 LOW / HIGH; pads without motors ignore it), PERFORMANCE HUD, CONTROLS... (remapping)
+FREE PLAY, VOLUME, ROTATE CONTROLS (only for Tate with the monitor NOT turned: the stick then
+                 follows the sideways picture; off when the monitor is turned), RUMBLE P1 / P2 (pad rumble when that player loses a
+                 ship: OFF / LOW / HIGH, off by default; pads without motors ignore it), PERFORMANCE HUD, CONTROLS... (remapping)
 
 The overlay (F10) shows game and present FPS, CPU time per game frame (EMU), CAP = game frames per
 second your CPU could run, and PRES = time spent drawing and presenting (with vsync on this includes
@@ -96,4 +97,4 @@ Command line
 ------------
 --yoko --tate-cw --tate-ccw --scale N --fullscreen --no-vsync --sync-display --uncapped --integer
 --shader none|sharp|crt|crt-curved --no-bezel --artwork FILE --no-slowdown --coins --freeplay
---rotate-controls --no-rumble --volume 0-100 --no-sound --hud --config FILE
+--rotate-controls --rumble --no-rumble --volume 0-100 --no-sound --hud --config FILE

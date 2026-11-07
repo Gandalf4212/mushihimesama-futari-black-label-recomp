@@ -30,8 +30,9 @@
 * **test22 (2026-11-06): rumble.** Lives bytes found by RAM diff of run_headless dumps and confirmed against
   screenshots (HUD ship icons): **P1 0x0C383E4F, P2 0x0C383F1B** (lives incl. the ship in play, start 3,
   player structs 0xCC apart). In game.json "lives" -> GAME_LIVES_P1/P2 -> main_sdl.c rumbles that
-  player's pad (SDL_RumbleGamepad) when its byte drops by 1. Config [input] rumble = 0/1/2 (default 1),
-  F1 > RUMBLE, --no-rumble. Earlier 0x0C200DB0 candidate was wrong (bad RAM size, see below).
+  player's pad (SDL_RumbleGamepad) when its byte drops by 1. Config [input] rumble_p1 / rumble_p2 = 0/1/2
+  (default 0 = off, per user), F1 > RUMBLE P1 / P2, --rumble / --no-rumble. User: works first try.
+  Rotate controls stays manual (decided: picture is upright in all modes when the monitor is turned). Earlier 0x0C200DB0 candidate was wrong (bad RAM size, see below).
 * **run_headless RAM size is 800000 (8 MB, game.json ram_size), not 8000000.** With 8000000 the blitter
   reads its lists from the wrong place: --png frames are black and --dump-ram writes 128 MB per frame.
   (The handoff text had 8000000.)

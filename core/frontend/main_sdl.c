@@ -230,7 +230,7 @@ int main(int argc, char **argv)
                 static int last[2] = { -1, -1 };
                 for (int p = 0; p < 2; p++) {
                     int v = g_m.ram[lives_at[p] & (g_m.ram_size - 1)];
-                    if (last[p] > 0 && v == last[p] - 1) input_rumble(&in, p, cfg.rumble);
+                    if (last[p] > 0 && v == last[p] - 1) input_rumble(&in, p, cfg.rumble[p]);
                     last[p] = v;
                 }
             }
