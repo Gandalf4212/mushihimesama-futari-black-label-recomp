@@ -1,6 +1,81 @@
 # Status
 
-## START HERE (handoff 2026-11-06)
+## START HERE (handoff 2026-11-06, end of day)
+
+### Where we are
+* Latest test build: **F:\claude2\fbl\futaribl_windows_test23.zip** (private: it contains the recompiled game
+  code, see "Builder"). User-confirmed working on Windows: SDL3 frontend, Vulkan shaders (none / sharp /
+  crt / crt-curved), our Yoko bezel + MAME .lay artwork packs, fit / integer scaling, uncapped benchmark
+  HUD, first-run ROM import (folder / zip / 7z / picker) with the CRC check screen, key + pad remapping
+  (F1 > CONTROLS), rumble per player (P1 0x0C383E4F, P2 0x0C383F1B lives bytes).
+* Packaging: `tools/package_release.sh futaribl out.zip` -> exe, SDL3.dll, README.txt (ours,
+  games/futaribl/README.txt), LICENSE.txt. Never ROMs, artwork, generated C.
+* Decisions: 60.024 Hz is the native rate ("pcb" option removed); free play stays the coin trick (the board
+  has no free-play setting); rotate controls stays manual; rumble off by default; artwork packs are the
+  user's (LaunchBox "Cave Shoot Part 1": copy default.lay, vert_screen_bezel.png, vert_screen_mask.png,
+  04.png -> art1.png into Bezel\); SDL3 GPU = Vulkan only.
+
+### Next, in order (target v0.8.0)
+1. **Builder (the v0.8.0 blocker)**: the public release must not contain Cave's code. Plan in
+   docs/builder-plan.md: futaribl.exe = launcher + runtime + frontend (ours); game code compiled on the
+   player's PC into assets/game.dll by a bundled portable GCC (w64devkit), after the ROM check screen.
+   Steps: (a) dispatch.c: generated table behind a pointer + a callback table for the runtime helpers the
+   generated code calls, ABI version + u4 CRC check, LoadLibrary of game.dll, interpreter fallback;
+   (b) port core/sh3/discover.py + gen_c.py (+ isa.py tables; 634 lines total) to C inside the exe,
+   or as a small tool exe; check output is byte-identical to the Python one; (c) ship misses.txt as
+   hints/<set>.txt (addresses only) instead of the second build pass; (d) trim w64devkit, ship its
+   licence notices; (e) first-run "building" screen (ROM-check style: file n/43, elapsed) and a rebuild
+   prompt when the ABI version changes. Expect ~2-3 min compile on 8 cores, ~10 on 2.
+2. Reset game from the F1 menu (needs a cv1k teardown + re-init).
+3. Compare sound against MAME -wavwrite (same stage1.txt inputs, nvram deleted) vs
+   `run_headless ... --sound u23 u24 --wav`.
+4. Milestone 4: instruction unit tests.
+5. Linux build: needs SDL3 (not packaged on Ubuntu 24.04: build from source); JPEG artwork is Windows-only (WIC).
+6. Optional sync leftovers (below).
+
+### Frame pacing / sync vs MAME 0.289: what was done, what is left
+Full detail: docs/timing-sync-notes.md (sections 4, 6b, 6c). Summary:
+* Mechanism: game speed and slowdown come from how many SH-3 cycles each game frame costs vs. VBLANK, so
+  we model MAME's sh7709s cache/memory timing (docs/timing.md) and its scheduler quirks.
+* MAME-parity fixes in: (1) instruction fetches charged at MAME's **stale DRC PC** (SH3.fpc; MAME only
+  refreshes it at timeslice ends, exceptions/IRQ/TRAPA, RTE, LDC SR checkints, the pcflush address and
+  the nocode handler; `--real-fetch` = old model); (2) MAME's **idle speedup** (10 us / 1024-cycle spin at
+  0x0C05176A, ram var 0x0C002310; game.json "idle"; frontend calls cv1k_set_idle); (3) **VBLANK at
+  (k+1)/60.024 s** (measured with flaglog); (4) **IRQ acceptance and timeslice ends at MAME's update
+  points** (gen_c.py UPDATE_POINT after flushing memory ops, event checks on forward/backward branches
+  and fall-ins, none on not-taken branches), serviced in place via SH3.service.
+* Results: frames 502-700 frame-exact vs MAME with equal 5 us polling on both sides; unperturbed stage1:
+  73 % of flips on the same VBLANK, the rest +-1 VBLANK (work ending right at a VBLANK); a fixed 2-frame
+  shift at power-on from the first ~29 boot frames (no effect on speed). User: slowdown side by side with
+  MAME indistinguishable, sound clean, no stutter. Heavy frames 6.3 ms host time on the 2-core box.
+* Frontend pacing: wall clock at 60.024 Hz (frame_rate native), or "display" = one frame per refresh
+  (MAME -syncrefresh) on 59-61 Hz displays; vsync separate; uncapped = present flat out, game paced.
+* Left (optional): (a) where MAME refreshes its stale fetch PC during boot (markers MAME 5/18/28/29/45 vs
+  ours 6/20/29/31/47; --real-fetch 6/19/29/30/46: other scheduler events or the nocode handler on first
+  execution of a block?) -> fixes the 2-frame power-on shift; (b) mirror update points in the
+  interpreter (it can exit after every instruction); (c) heavy frames ~0.02 ms (0.06 %) fast.
+* References on F:\claude2\fbl: watch.txt, watch_boot.txt, watch_stage1.txt (per-frame watchlog: use
+  these), mame_flags_500.txt (5 us flaglog: compare only with `--slice-us 5`). Delete
+  F:\mame0.289\nvram\futaribl before every MAME capture; watchlog.bat address lists use "_".
+
+### Working notes
+* Workspace: clone, `git config core.hooksPath .githooks`; stage the 4 ROMs from F:\claude2\fbl\futaribl;
+  `pip install capstone --break-system-packages`; `apt-get install -y mingw-w64 zip lua5.4 glslang-tools`;
+  SDL3-devel-3.4.20-mingw.tar.gz from github.com/libsdl-org/SDL releases into /home/claude/deps (the
+  GitHub API is blocked; `git ls-remote --tags` lists versions).
+* Build: `tools/build_game.sh futaribl <romdir>` twice (~6.5 min each), then
+  `tools/build_frontend.sh futaribl windows` (~10 min; compiles the shaders too). For frontend-only
+  changes recompile the changed core/frontend/*.c into build/futaribl/windows/obj and relink (see the
+  g++ line in build_frontend.sh), ~10 s.
+* **run_headless RAM size is 800000** (8 MB): `run_headless u4 u2 800000 0C062FA0 <frames> --idle-pc 0C05176A`.
+  With 8000000 the blitter reads garbage (black PNGs) and --dump-ram writes 128 MB per frame.
+  `--watch-log file a,b,c` takes comma-separated addresses. RAM dumps: stream them (8 MB each), don't
+  stack hundreds in memory.
+* Deliver files: SendUserFile, then device_commit_files to F:\claude2\fbl with a new file name each time.
+* User budget is tight: small slices, filtered output, no subagents; end each session with STATUS,
+  commit, push, handoff.
+
+## Session log 2026-11-06 (details, newest first)
 * Milestones: 1, 2, 3, 5, 6, 10 done; 7 (pixel-exact rendering, timing close to MAME) ongoing;
   9 (sound) first cut done; 11 (frontend) playable on Windows with HUD (F10) and sound.
 * Latest Windows build: test9 (see below). Earlier: futaribl_windows_test7.zip (2026-11-06). test6 crackled and slowed

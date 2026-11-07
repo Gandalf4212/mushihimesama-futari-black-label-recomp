@@ -131,7 +131,7 @@ Result now: total work +0.34 % vs MAME (was +0.89 %); with timer IRQs disabled o
 * VBLANK: MAME 0.289 cv1k uses set_refresh(60.024 Hz). Measured with flaglog (mame_flags_500.txt): the
   flip at frame 501 is at 8.346676 s = 501.000 / 60.024 + handler time, i.e. VBLANK k at k / 60.024 s
   (a first guess of "line 240 of 512" was wrong: it put every IRQ 7.8 ms late). Now
-  `cv1k_vsync_at(k)` = (k + 1) / 60.024; CV1K_HW_FRAME_HZ keeps the board's 60.0183806 Hz.
+  `cv1k_vsync_at(k)` = (k + 1) / 60.024; 60.024 Hz is also the native rate (MAME: measured on an Ibara PCB); the derived 60.0184 Hz "pcb" option was removed 2026-11-06.
   Watch-log frame labels now mean the same time on both sides (no shift).
 * IRQ acceptance / timeslice ends at MAME update points (gen_c.py): UPDATE_POINT(PC + 2) after every
   flushing memory op, the event check on forward as well as backward in-function branches and at
