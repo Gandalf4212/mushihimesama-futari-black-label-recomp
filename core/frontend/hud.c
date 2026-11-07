@@ -95,21 +95,22 @@ void hud_frame(Hud *h, int games, uint64_t emu_ticks, uint64_t pres_ticks, uint6
 void hud_draw(Hud *h, SDL_Renderer *r, int out_w, int out_h)
 {
     int px = out_h >= 1400 ? 3 : 2;                      /* font pixel size */
-    int lh = 9 * px, x0 = 8, y0 = 8, w = 6 * px * 32 + 2 * px, gh = 24 * px;
+    char ln[4][64];
+    snprintf(ln[0], 64, "GAME %5.2f  PRESENT %5.0f FPS", h->game_fps, h->fps);
+    snprintf(ln[1], 64, "CPU %5.1f%%  EMU %5.2f MS  CAP %4.0f", h->emu_ms / (1000.0 / CV1K_FRAME_HZ) * 100.0, h->emu_ms,
+             h->emu_ms > 0 ? 1000.0 / h->emu_ms : 0.0);
+    snprintf(ln[2], 64, "FRAME %5.2f MS  MAX %5.2f", h->frame_ms, h->max_ms);
+    snprintf(ln[3], 64, "PRES %5.2f MS  %s %s", h->pres_ms, h->backend ? h->backend : "", h->note ? h->note : "");
+    size_t maxc = 26;                                    /* the box fits the longest line */
+    for (int i = 0; i < 4; i++) if (strlen(ln[i]) > maxc) maxc = strlen(ln[i]);
+    int lh = 9 * px, x0 = 8, y0 = 8, w = 6 * px * (int)maxc, gh = 24 * px;
     (void)out_w;
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(r, 0, 0, 0, 170);
-    SDL_FRect bg = {x0 - 4, y0 - 4, w + 8, 4 * lh + gh + 12};
+    SDL_FRect bg = {x0 - 6, y0 - 6, w + 12, 4 * lh + gh + 14};
     SDL_RenderFillRect(r, &bg);
-    char line[64];
     SDL_SetRenderDrawColor(r, 255, 255, 255, 255);
-    snprintf(line, sizeof line, "GAME %5.2f  PRESENT %5.0f FPS", h->game_fps, h->fps);  text(r, x0, y0, px, line);
-    snprintf(line, sizeof line, "CPU %5.1f%%  EMU %5.2f MS  CAP %4.0f", h->emu_ms / (1000.0 / CV1K_FRAME_HZ) * 100.0, h->emu_ms,
-             h->emu_ms > 0 ? 1000.0 / h->emu_ms : 0.0);
-    text(r, x0, y0 + lh, px, line);
-    snprintf(line, sizeof line, "FRAME %5.2f MS  MAX %5.2f", h->frame_ms, h->max_ms); text(r, x0, y0 + 2 * lh, px, line);
-    snprintf(line, sizeof line, "PRES %5.2f MS  %s %s", h->pres_ms, h->backend ? h->backend : "", h->note ? h->note : "");
-    text(r, x0, y0 + 3 * lh, px, line);
+    for (int i = 0; i < 4; i++) text(r, x0, y0 + i * lh, px, ln[i]);
     /* graph: frame time (white) and emulation time (green) for the last HUD_GRAPH frames, 0-33 ms;
        the line marks one 60 Hz frame (16.7 ms) */
     int gy = y0 + 4 * lh + 4, bw = w / HUD_GRAPH > 0 ? w / HUD_GRAPH : 1;

@@ -16,6 +16,8 @@
   Cause: core/frontend/input.c opened the same controller twice (explicit open at startup + SDL's
   CONTROLLERDEVICEADDED for already-connected pads), so one pad drove both players' inputs incl.
   Start, and free play coined + started both. Now an already-open pad is ignored.
+* **test16 (2026-11-06):** check screen now opens gamepads (A/B work) and closes them + SDL_QuitSubSystem(GAMEPAD)
+  afterwards so the game gets GAMEPAD_ADDED again; HUD box sized to its longest line (text overhung).
 * **test15 (2026-11-06): ROM check screen on import** (romfind.c check_screen): own window, HUD font, CRC32
   of each ROM with a progress bar, rows FILE / SIZE / CRC32 / EXPECTED / STATUS (GOOD green; BAD CRC, BAD
   SIZE, MISSING red); Enter/A/click continue, Esc/B choose other ROMs. Expected CRCs/sizes come from

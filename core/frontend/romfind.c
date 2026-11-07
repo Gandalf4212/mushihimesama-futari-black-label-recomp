@@ -312,11 +312,14 @@ static void draw_check(SDL_Renderer *r, int W, int H, const RomRow *row, int don
 }
 
 /* 0 = Esc (choose again), 1 = continue, -1 = window closed (quit) */
+static SDL_Gamepad *g_pads[8];
 static int poll_keys(int done)
 {
     SDL_Event e;
     while (SDL_PollEvent(&e)) {
         if (e.type == SDL_EVENT_QUIT || e.type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) return -1;
+        if (e.type == SDL_EVENT_GAMEPAD_ADDED)                         /* events only come from opened pads */
+            for (int i = 0; i < 8; i++) if (!g_pads[i]) { g_pads[i] = SDL_OpenGamepad(e.gdevice.which); break; }
         if (!done) continue;
         if (e.type == SDL_EVENT_KEY_DOWN && (e.key.key == SDLK_RETURN || e.key.key == SDLK_KP_ENTER || e.key.key == SDLK_SPACE)) return 1;
         if (e.type == SDL_EVENT_KEY_DOWN && e.key.key == SDLK_ESCAPE) return 0;
@@ -361,6 +364,10 @@ static int check_screen(const char *dir)
     }
     while (res == 2) { res = poll_keys(1); draw_check(r, W, H, row, 1, bad, (SDL_GetTicks() - t0) / 1000.f); }
     SDL_DestroyRenderer(r); SDL_DestroyWindow(win);
+    /* hand the pads back: close them and shut the gamepad subsystem down, so the game's own SDL_Init
+       starts it again and gets SDL_EVENT_GAMEPAD_ADDED for every connected pad */
+    for (int i = 0; i < 8; i++) if (g_pads[i]) { SDL_CloseGamepad(g_pads[i]); g_pads[i] = NULL; }
+    SDL_QuitSubSystem(SDL_INIT_GAMEPAD);
     if (res < 0) g_quit = 1;
     return res == 1;
 }
