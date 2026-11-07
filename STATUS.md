@@ -1,6 +1,18 @@
 # Status
 
-## START HERE (handoff 2026-11-07)
+## START HERE (handoff 2026-11-07, evening)
+
+### v0.8.0 release prepared (2026-11-07)
+* test27 user-confirmed (first-run build works on Windows). Repo cleaned for release: new README.md
+  (features, how it works, building), CHANGELOG.md, docs/release.md (checklist + GPL toolchain sources),
+  PLAN.md removed (folded into README), stray .pyc untracked, version 0.8.0 (core/frontend/version.h:
+  window title + F1 menu).
+* Copyright audit of all 69 commits / 403 blobs: largest blob 54 KB (STATUS.md); no ROM data, generated
+  C, RAM images, disassembly listings or artwork ever committed; only binaries were .pyc of our scripts.
+  Third-party code: MAME BSD-3 sound files (headers kept); everything else ours.
+* Release files (outputs/release): futaribl-v0.8.0-windows-x64.zip (no game.dll), w64devkit-2.9.1-source.zip.
+  **Left: user downloads the 6 upstream source archives (docs/release.md), then tag v0.8.0 + GitHub release.**
+
 
 ### Where we are
 * Latest test build: **F:\claude2\fbl\futaribl_windows_test27.zip** (no game code: the first public-safe build;: it contains the recompiled game

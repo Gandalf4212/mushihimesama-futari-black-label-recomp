@@ -3,6 +3,7 @@
  * Changes apply at once (the caller applies the returned MENU_CH_* bits) and are saved to
  * config.toml when the menu closes. GPL-2.0-or-later. */
 #include "menu.h"
+#include "version.h"
 #include "hud.h"
 #include <stdio.h>
 #include <string.h>
@@ -254,6 +255,8 @@ void menu_draw(const Menu *m, const Config *c, int show_hud, SDL_Renderer *r, in
     if (m->page == 1) { controls_draw(m, c, r, px, lh, cw, x0, y0, w, h); SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE); return; }
     SDL_SetRenderDrawColor(r, 255, 255, 255, 255);
     hud_text(r, x0 + cw * 2, y0 + lh / 2, px, "SETTINGS");
+    SDL_SetRenderDrawColor(r, 150, 150, 150, 255);
+    hud_text(r, x0 + w - cw * (int)(sizeof("V" APP_VERSION) + 1), y0 + lh / 2, px, "V" APP_VERSION);
     SDL_SetRenderDrawColor(r, 150, 150, 150, 255);
     hud_text(r, x0 + cw * 2, y0 + h - lh, px, "<> CHANGE   F1 / ESC / B CLOSE");
     for (int i = 0; i < I_COUNT; i++) {

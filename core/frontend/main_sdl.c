@@ -22,7 +22,7 @@
 #include "../runtime/cv1k.h"
 #include "../runtime/dispatch.h"
 #include "../render/blit_ref.h"
-#include "game_config.h"
+#include "game_config.h"   /* generated per game (tools/build_frontend.sh): GAME_SET, GAME_TITLE, GAME_RAM_SIZE, ... */
 #include "config.h"
 #include "hud.h"
 #include "menu.h"
@@ -30,7 +30,8 @@
 #include "romfind.h"
 #include "input.h"
 #include "gamedll.h"
-#include "builder.h"   /* generated per game: GAME_SET, GAME_TITLE, GAME_RAM_SIZE, GAME_MAIN_ENTRY, GAME_U4, GAME_U2 */
+#include "builder.h"
+#include "version.h"
 
 static BlitRef g_blit;
 static CV1K g_m;
@@ -154,7 +155,7 @@ int main(int argc, char **argv)
     SDL_SetHint(SDL_HINT_AUDIO_DEVICE_SAMPLE_FRAMES, "256");   /* small device buffer: low latency */
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMEPAD | SDL_INIT_AUDIO)) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); return 1; }
     int ww, wh; window_size(orient, scale, &ww, &wh);
-    SDL_Window *win = SDL_CreateWindow(GAME_TITLE, ww, wh, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY | (fullscreen ? SDL_WINDOW_FULLSCREEN : 0));
+    SDL_Window *win = SDL_CreateWindow(GAME_TITLE "  (recomp v" APP_VERSION ")", ww, wh, SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY | (fullscreen ? SDL_WINDOW_FULLSCREEN : 0));
     if (!win) { fprintf(stderr, "SDL: %s\n", SDL_GetError()); return 1; }
     fit_window_pixels(win, ww, wh);
     Presenter pr;

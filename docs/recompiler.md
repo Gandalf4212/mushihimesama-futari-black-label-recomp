@@ -2,12 +2,12 @@
 
 1. **Boot** (`core/runtime/boot_runner.c`): the game's own startup code runs on the reference
    interpreter until `game.json boot.main_entry`. Result: the unpacked RAM image.
-2. **Discovery** (`core/sh3/discover.py`): recursive descent from the main entry, the VBR handlers, every
+2. **Discovery** (`core/sh3/recomp.c`; `discover.py` is the Python reference it is checked against): recursive descent from the main entry, the VBR handlers, every
    pointer in the exception/IRQ vector table, call targets, and every aligned word in the image that
    points into the code region (function-pointer tables; Cave's task system uses many). Candidates
    that are not reached by known control flow are accepted only if decoding never hits an illegal
    opcode. futaribl: 5,126 functions, ~1 MB of code.
-3. **Generation** (`core/sh3/gen_c.py`): one C function per discovered function, instruction bodies
+3. **Generation** (`core/sh3/recomp.c`; reference `gen_c.py`, byte-identical output, `tools/check_translator.sh`): one C function per discovered function, instruction bodies
    taken from `isa.py` (the same text the interpreter is built from).
    - Entered through the dispatcher at any block start (`switch` on `s->pc`).
    - Calls, returns, indirect jumps: set `s->pc`, return to the dispatcher. The C stack never mirrors

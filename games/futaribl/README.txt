@@ -1,15 +1,17 @@
-Mushihime-Sama Futari Black Label - native PC recompilation
-=============================================================
+Mushihime-Sama Futari Black Label - native PC recompilation, v0.8.0
+====================================================================
 
-This is a static recompilation of the arcade game for Windows: the game's own SH-3 program was
-translated ahead of time into native x86-64 code, and the CV1000 board around it (graphics blitter,
-YMZ770 sound, timers, NAND) is reproduced in software. Timing follows MAME 0.289 frame for frame,
+This is a static recompilation of the arcade game for Windows: the game's own SH-3 program is
+translated into native x86-64 code (on your PC, from your ROM, the first time you start it), and
+the CV1000 board around it (graphics blitter, YMZ770 sound, timers, NAND) is reproduced in software. Timing follows MAME 0.289 frame for frame,
 including the original slowdown.
 
-No game data is included. You need your own copy of the MAME "futaribl" ROM set.
+No game code or data is included. You need your own copy of the MAME "futaribl" ROM set.
+Mushihime-Sama Futari is (c) Cave. This project is not affiliated with or endorsed by Cave.
 
 Source code and license: https://github.com/Gandalf4212/mushihimesama-futari-black-label-recomp
 License: GPL-2.0-or-later (see LICENSE). The YMZ770 decoder is from MAME (BSD-3-Clause).
+The compiler in the toolchain folder: see toolchain\README.txt for its licences and sources.
 
 
 First start
