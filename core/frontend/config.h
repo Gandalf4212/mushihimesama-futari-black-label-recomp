@@ -4,6 +4,14 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 typedef enum { ORIENT_YOKO, ORIENT_TATE_CW, ORIENT_TATE_CCW } Orientation;
+
+/* Control bindings. Actions per player (P2 = P1 + ACT_PER_PLAYER), then the cabinet switches. */
+enum { ACT_UP, ACT_DOWN, ACT_LEFT, ACT_RIGHT, ACT_B1, ACT_B2, ACT_B3, ACT_B4, ACT_START, ACT_COIN, ACT_PER_PLAYER };
+enum { ACT_SERVICE = 2 * ACT_PER_PLAYER, ACT_TEST, ACT_COUNT };
+/* Gamepad buttons (both pads; directions are always d-pad + left stick) */
+enum { PAD_B1, PAD_B2, PAD_B3, PAD_B4, PAD_START, PAD_COIN, PAD_COUNT };
+extern const char *const act_key_name[ACT_COUNT];     /* config keys: p1_up ... service, test */
+extern const char *const pad_key_name[PAD_COUNT];     /* config keys: pad_b1 ... pad_coin */
 typedef struct {
     Orientation orientation;   /* [video] orientation = "yoko" | "tate-cw" | "tate-ccw" */
     int scale;                 /* [video] scale = 0 (auto) */
@@ -23,8 +31,11 @@ typedef struct {
                                   for Bezel/default.lay or artwork/default.lay next to the program */
     int artwork_views;         /* runtime: views in the loaded .lay (not saved) */
     int uncapped;              /* [video] uncapped = false (benchmark: present as fast as possible; game stays 60.024 Hz) */
+    int key[ACT_COUNT][2];     /* [input] p1_up = "Up" ... : up to two SDL scancodes per action (0 = none) */
+    int pad[PAD_COUNT];        /* [input] pad_b1 = "a" ... : SDL gamepad button (-1 = none) */
 } Config;
 void config_defaults(Config *c);
+void config_default_controls(Config *c);
 enum { RATE_NATIVE, RATE_DISPLAY };
 enum { SCALING_FIT, SCALING_INTEGER };
 enum { SHADER_NONE, SHADER_SHARP, SHADER_CRT, SHADER_CURVED };

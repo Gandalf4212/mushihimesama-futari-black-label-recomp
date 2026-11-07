@@ -37,6 +37,10 @@ Coin         5                                6
 Gamepad: d-pad or left stick, A B X Y = buttons 1-4, Start = start, Back = coin.
 Two pads: the first is player 1, the second player 2.
 
+All of these can be changed in F1 > CONTROLS...: pick an action and press the new key (or pad button
+for the PAD rows). Each action keeps up to two keys; Delete (or X on a pad) clears one, RESET TO
+DEFAULTS restores the list above. Saved in config.toml under [input].
+
 F1           settings menu (gamepad: Guide, or Back + Start). The game pauses while it is open.
 F10          performance overlay
 F11          fullscreen on/off
@@ -60,7 +64,7 @@ UNCAPPED FPS     benchmark: draws as fast as possible; the game itself still run
 GAME SPEED       NATIVE 60.024 HZ (the board's rate), or DISPLAY REFRESH (one frame per refresh
                  on a 60 Hz display, like MAME's -syncrefresh)
 SLOWDOWN         ON = original arcade slowdown
-FREE PLAY, VOLUME, ROTATE CONTROLS (for Tate), PERFORMANCE HUD
+FREE PLAY, VOLUME, ROTATE CONTROLS (for Tate), PERFORMANCE HUD, CONTROLS... (key / pad remapping)
 
 The overlay (F10) shows game and present FPS, CPU time per game frame (EMU), CAP = game frames per
 second your CPU could run, and PRES = time spent drawing and presenting (with vsync on this includes

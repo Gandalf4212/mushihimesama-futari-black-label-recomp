@@ -8,7 +8,7 @@
 #include <string.h>
 
 enum { I_ORIENT, I_SCALE, I_SCALING, I_SHADER, I_BEZEL, I_FULLSCREEN, I_VSYNC, I_UNCAPPED, I_RATE, I_SLOWDOWN, I_FREEPLAY, I_VOLUME, I_ROTCTL, I_HUD,
-       I_RESUME, I_QUIT, I_COUNT };
+       I_CONTROLS, I_RESUME, I_QUIT, I_COUNT };
 
 void menu_init(Menu *m) { memset(m, 0, sizeof *m); }
 
@@ -37,7 +37,7 @@ static void value(const Config *c, int show_hud, int i, char *out, size_t n)
 
 static const char *label[I_COUNT] = {
     "ORIENTATION", "WINDOW SCALE", "SCALING", "SHADER", "BEZEL", "FULLSCREEN", "VSYNC", "UNCAPPED FPS", "GAME SPEED", "SLOWDOWN", "FREE PLAY", "VOLUME",
-    "ROTATE CONTROLS", "PERFORMANCE HUD", "RESUME", "QUIT"
+    "ROTATE CONTROLS", "PERFORMANCE HUD", "CONTROLS...", "RESUME", "QUIT"
 };
 
 /* dir = -1 / +1 (left / right), 0 = activate (Enter / A) */
@@ -59,6 +59,7 @@ static int change(Menu *m, Config *c, int *show_hud, int dir)
     case I_VOLUME: c->volume += 10 * d; if (c->volume < 0) c->volume = 0; if (c->volume > 100) c->volume = 100; break;
     case I_ROTCTL: c->rotate_controls = !c->rotate_controls; break;
     case I_HUD: *show_hud = !*show_hud; c->hud = *show_hud; break;
+    case I_CONTROLS: if (!dir) { m->page = 1; m->csel = 0; m->capture = 0; } return 0;
     case I_RESUME: if (!dir) { m->open = 0; return MENU_CH_CLOSED; } return 0;
     case I_QUIT: if (!dir) return MENU_CH_QUIT; return 0;
     }
@@ -68,20 +69,128 @@ static int change(Menu *m, Config *c, int *show_hud, int dir)
 
 static int move(Menu *m, int d) { m->sel = (m->sel + I_COUNT + d) % I_COUNT; return 0; }
 
+/* ---------------- CONTROLS page ---------------- */
+enum { C_PAD0 = ACT_COUNT, C_RESET = ACT_COUNT + PAD_COUNT, C_BACK, C_ROWS };
+
+static void crow_label(int r, char *out, size_t n)
+{
+    static const char *act[ACT_PER_PLAYER] = { "UP", "DOWN", "LEFT", "RIGHT", "BUTTON 1", "BUTTON 2", "BUTTON 3", "BUTTON 4", "START", "COIN" };
+    static const char *pad[PAD_COUNT] = { "PAD BUTTON 1", "PAD BUTTON 2", "PAD BUTTON 3", "PAD BUTTON 4", "PAD START", "PAD COIN" };
+    if (r < 2 * ACT_PER_PLAYER) snprintf(out, n, "P%d %s", r / ACT_PER_PLAYER + 1, act[r % ACT_PER_PLAYER]);
+    else if (r == ACT_SERVICE) snprintf(out, n, "SERVICE");
+    else if (r == ACT_TEST) snprintf(out, n, "TEST");
+    else if (r < C_RESET) snprintf(out, n, "%s", pad[r - C_PAD0]);
+    else snprintf(out, n, r == C_RESET ? "RESET TO DEFAULTS" : "BACK");
+}
+
+static void crow_value(const Config *c, int r, char *out, size_t n)
+{
+    out[0] = 0;
+    if (r < ACT_COUNT) {
+        const char *a = c->key[r][0] ? SDL_GetScancodeName((SDL_Scancode)c->key[r][0]) : "";
+        const char *b = c->key[r][1] ? SDL_GetScancodeName((SDL_Scancode)c->key[r][1]) : "";
+        snprintf(out, n, "%s%s%s", a, *a && *b ? " / " : "", *a || *b ? b : "-");
+    } else if (r < C_RESET) {
+        int p = c->pad[r - C_PAD0];
+        const char *s = p >= 0 ? SDL_GetGamepadStringForButton((SDL_GamepadButton)p) : NULL;
+        snprintf(out, n, "%s", s ? s : "-");
+    }
+    if (strlen(out) > 18) out[18] = 0;
+}
+
+static int controls_event(Menu *m, Config *c, const SDL_Event *e)
+{
+    int r = m->csel;
+    if (m->capture) {
+        if (e->type == SDL_EVENT_KEY_DOWN && !e->key.repeat) {
+            SDL_Scancode sc = e->key.scancode;
+            if (sc == SDL_SCANCODE_ESCAPE) { m->capture = 0; return 0; }
+            if (r >= ACT_COUNT || sc == SDL_SCANCODE_F1 || sc == SDL_SCANCODE_F10 || sc == SDL_SCANCODE_F11) return 0;   /* reserved */
+            if (c->key[r][0] != (int)sc) { c->key[r][1] = c->key[r][0]; c->key[r][0] = sc; }   /* newest first, keep one more */
+            if (c->key[r][1] == (int)sc) c->key[r][1] = 0;
+            m->capture = 0; m->dirty = 1;
+        } else if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
+            if (r >= C_PAD0 && r < C_RESET && e->gbutton.button != SDL_GAMEPAD_BUTTON_GUIDE) { c->pad[r - C_PAD0] = e->gbutton.button; m->capture = 0; m->dirty = 1; }
+            else if (r < ACT_COUNT && e->gbutton.button == SDL_GAMEPAD_BUTTON_EAST) m->capture = 0;
+        }
+        return 0;
+    }
+    int act = 0, mv = 0, clr = 0, back = 0;
+    if (e->type == SDL_EVENT_KEY_DOWN) {
+        switch (e->key.key) {
+        case SDLK_UP: mv = -1; break;
+        case SDLK_DOWN: mv = 1; break;
+        case SDLK_RETURN: case SDLK_KP_ENTER: case SDLK_SPACE: if (!e->key.repeat) act = 1; break;
+        case SDLK_DELETE: case SDLK_BACKSPACE: clr = 1; break;
+        case SDLK_ESCAPE: if (!e->key.repeat) back = 1; break;
+        case SDLK_F1: if (!e->key.repeat) { m->page = 0; m->open = 0; return MENU_CH_CLOSED; } break;
+        }
+    } else if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
+        switch (e->gbutton.button) {
+        case SDL_GAMEPAD_BUTTON_DPAD_UP: mv = -1; break;
+        case SDL_GAMEPAD_BUTTON_DPAD_DOWN: mv = 1; break;
+        case SDL_GAMEPAD_BUTTON_SOUTH: act = 1; break;
+        case SDL_GAMEPAD_BUTTON_WEST: clr = 1; break;
+        case SDL_GAMEPAD_BUTTON_EAST: back = 1; break;
+        case SDL_GAMEPAD_BUTTON_GUIDE: m->page = 0; m->open = 0; return MENU_CH_CLOSED;
+        }
+    } else if (e->type == SDL_EVENT_GAMEPAD_AXIS_MOTION && e->gaxis.axis == SDL_GAMEPAD_AXIS_LEFTY) {
+        int v = e->gaxis.value, dir = v > 20000 ? 1 : v < -20000 ? -1 : 0;
+        if (!dir) { m->repeat_at = 0; return 0; }
+        Uint64 now = SDL_GetTicks();
+        if (m->repeat_at && now < m->repeat_at) return 0;
+        m->repeat_at = now + (m->repeat_at ? 120 : 350); mv = dir;
+    }
+    if (mv) m->csel = (m->csel + C_ROWS + mv) % C_ROWS;
+    if (back) { m->page = 0; m->capture = 0; }
+    if (clr && r < ACT_COUNT) { c->key[r][0] = c->key[r][1] = 0; m->dirty = 1; }
+    if (clr && r >= C_PAD0 && r < C_RESET) { c->pad[r - C_PAD0] = -1; m->dirty = 1; }
+    if (act) {
+        if (r < C_RESET) m->capture = 1;
+        else if (r == C_RESET) { config_default_controls(c); m->dirty = 1; }
+        else m->page = 0;
+    }
+    return 0;
+}
+
+static void controls_draw(const Menu *m, const Config *c, SDL_Renderer *r, int px, int lh, int cw, int x0, int y0, int w, int h)
+{
+    SDL_SetRenderDrawColor(r, 255, 255, 255, 255);
+    hud_text(r, x0 + cw * 2, y0 + lh / 2, px, "CONTROLS");
+    int vis = I_COUNT, top = m->csel - vis / 2;
+    if (top > C_ROWS - vis) top = C_ROWS - vis;
+    if (top < 0) top = 0;
+    for (int k = 0; k < vis && top + k < C_ROWS; k++) {
+        int i = top + k, y = y0 + (k + 2) * lh;
+        if (i == m->csel) {
+            SDL_SetRenderDrawColor(r, m->capture ? 170 : 60, m->capture ? 110 : 90, m->capture ? 40 : 160, 255);
+            SDL_FRect hl = {x0 + cw, y - px * 2, w - 2 * cw, lh}; SDL_RenderFillRect(r, &hl);
+        }
+        char l[32], v[40]; crow_label(i, l, sizeof l);
+        SDL_SetRenderDrawColor(r, 255, 255, 255, 255); hud_text(r, x0 + cw * 2, y, px, l);
+        if (i == m->csel && m->capture) snprintf(v, sizeof v, i < ACT_COUNT ? "PRESS A KEY" : "PRESS A BUTTON");
+        else crow_value(c, i, v, sizeof v);
+        SDL_SetRenderDrawColor(r, 255, 220, 120, 255); hud_text(r, x0 + cw * 21, y, px, v);
+    }
+    SDL_SetRenderDrawColor(r, 150, 150, 150, 255);
+    hud_text(r, x0 + cw * 2, y0 + h - lh, px, m->capture ? "ESC CANCELS" : "ENTER/A SET  DEL/X CLEAR  ESC/B BACK");
+}
+
 int menu_event(Menu *m, Config *c, int *show_hud, const SDL_Event *e)
 {
     if (!m->open) {
         if ((e->type == SDL_EVENT_KEY_DOWN && e->key.key == SDLK_F1 && !e->key.repeat) ||
             (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN && e->gbutton.button == SDL_GAMEPAD_BUTTON_GUIDE)) {
-            m->open = 1; m->dirty = 0;
+            m->open = 1; m->dirty = 0; m->page = 0; m->capture = 0;
         }
         if (e->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN &&
             (e->gbutton.button == SDL_GAMEPAD_BUTTON_START || e->gbutton.button == SDL_GAMEPAD_BUTTON_BACK)) {
             SDL_Gamepad *g = SDL_GetGamepadFromID(e->gbutton.which);   /* Back + Start (XInput often hides Guide) */
-            if (g && SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_START) && SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_BACK)) { m->open = 1; m->dirty = 0; }
+            if (g && SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_START) && SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_BACK)) { m->open = 1; m->dirty = 0; m->page = 0; m->capture = 0; }
         }
         return 0;
     }
+    if (m->page == 1) return controls_event(m, c, e);
     if (e->type == SDL_EVENT_KEY_DOWN) {
         switch (e->key.key) {
         case SDLK_F1: case SDLK_ESCAPE: if (e->key.repeat) return 0; m->open = 0; return MENU_CH_CLOSED;
@@ -122,6 +231,7 @@ void menu_draw(const Menu *m, const Config *c, int show_hud, SDL_Renderer *r, in
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(r, 0, 0, 0, 210);
     SDL_FRect bg = {x0, y0, w, h}; SDL_RenderFillRect(r, &bg);
+    if (m->page == 1) { controls_draw(m, c, r, px, lh, cw, x0, y0, w, h); SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_NONE); return; }
     SDL_SetRenderDrawColor(r, 255, 255, 255, 255);
     hud_text(r, x0 + cw * 2, y0 + lh / 2, px, "SETTINGS");
     SDL_SetRenderDrawColor(r, 150, 150, 150, 255);

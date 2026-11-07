@@ -1,5 +1,28 @@
 /* Minimal TOML-subset config reader/writer. GPL-2.0-or-later. */
 #include "config.h"
+#include <SDL3/SDL.h>
+
+const char *const act_key_name[ACT_COUNT] = {
+    "p1_up", "p1_down", "p1_left", "p1_right", "p1_b1", "p1_b2", "p1_b3", "p1_b4", "p1_start", "p1_coin",
+    "p2_up", "p2_down", "p2_left", "p2_right", "p2_b1", "p2_b2", "p2_b3", "p2_b4", "p2_start", "p2_coin",
+    "service", "test" };
+const char *const pad_key_name[PAD_COUNT] = { "pad_b1", "pad_b2", "pad_b3", "pad_b4", "pad_start", "pad_coin" };
+
+/* MAME's default keys, plus Z X C V for P1's buttons */
+void config_default_controls(Config *c)
+{
+    static const int k[ACT_COUNT][2] = {
+        {SDL_SCANCODE_UP}, {SDL_SCANCODE_DOWN}, {SDL_SCANCODE_LEFT}, {SDL_SCANCODE_RIGHT},
+        {SDL_SCANCODE_LCTRL, SDL_SCANCODE_Z}, {SDL_SCANCODE_LALT, SDL_SCANCODE_X}, {SDL_SCANCODE_SPACE, SDL_SCANCODE_C},
+        {SDL_SCANCODE_LSHIFT, SDL_SCANCODE_V}, {SDL_SCANCODE_1}, {SDL_SCANCODE_5},
+        {SDL_SCANCODE_R}, {SDL_SCANCODE_F}, {SDL_SCANCODE_D}, {SDL_SCANCODE_G},
+        {SDL_SCANCODE_A}, {SDL_SCANCODE_S}, {SDL_SCANCODE_Q}, {SDL_SCANCODE_W}, {SDL_SCANCODE_2}, {SDL_SCANCODE_6},
+        {SDL_SCANCODE_9}, {SDL_SCANCODE_F2} };
+    memcpy(c->key, k, sizeof k);
+    static const int p[PAD_COUNT] = { SDL_GAMEPAD_BUTTON_SOUTH, SDL_GAMEPAD_BUTTON_EAST, SDL_GAMEPAD_BUTTON_WEST,
+                                      SDL_GAMEPAD_BUTTON_NORTH, SDL_GAMEPAD_BUTTON_START, SDL_GAMEPAD_BUTTON_BACK };
+    memcpy(c->pad, p, sizeof p);
+}
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,6 +32,7 @@ void config_defaults(Config *c)
 {
     c->orientation = ORIENT_YOKO; c->scale = 0; c->fullscreen = 0; c->hud = 0;
     c->slowdown = 1; c->freeplay = 1; c->rotate_controls = 0; c->vsync = 1; c->rate = RATE_NATIVE; c->volume = 100;
+    config_default_controls(c);
     c->scaling = SCALING_FIT; c->shader = SHADER_SHARP; c->bezel = 1; c->artwork[0] = 0; c->artwork_views = 0; c->uncapped = 0;
 }
 
@@ -41,6 +65,24 @@ static void set(Config *c, const char *sec, const char *key, const char *v)
     else if (!strcmp(full, "video.bezel")) c->bezel = !strcmp(v, "true") ? 1 : !strcmp(v, "false") ? 0 : atoi(v);
     else if (!strcmp(full, "video.artwork") || !strcmp(full, "video.bezel_image")) snprintf(c->artwork, sizeof c->artwork, "%s", v);
     else if (!strcmp(full, "video.uncapped")) c->uncapped = as_bool(v);
+    else if (!strncmp(full, "input.", 6)) {
+        const char *k = full + 6;
+        for (int i = 0; i < ACT_COUNT; i++) if (!strcmp(k, act_key_name[i])) {   /* "Left Ctrl, Z" */
+            char buf[128]; snprintf(buf, sizeof buf, "%s", v);
+            c->key[i][0] = c->key[i][1] = 0; int n = 0;
+            for (char *t = strtok(buf, ","); t && n < 2; t = strtok(NULL, ",")) {
+                while (*t == ' ') t++;
+                char *e = t + strlen(t); while (e > t && e[-1] == ' ') *--e = 0;
+                SDL_Scancode sc = SDL_GetScancodeFromName(t);
+                if (sc != SDL_SCANCODE_UNKNOWN) c->key[i][n++] = sc;
+            }
+            return;
+        }
+        for (int i = 0; i < PAD_COUNT; i++) if (!strcmp(k, pad_key_name[i])) {
+            c->pad[i] = *v ? SDL_GetGamepadButtonFromString(v) : -1; return;
+        }
+        fprintf(stderr, "config: unknown key %s\n", full);
+    }
     else fprintf(stderr, "config: unknown key %s\n", full);
 }
 
@@ -114,6 +156,17 @@ int config_save(const Config *c, const char *path)
     fprintf(f, "[game]\nslowdown = %s          # original slowdown\nfreeplay = %s          # Start inserts a coin when needed\nframe_rate = \"%s\"      # native (60.024 Hz) | display (1 frame per refresh on ~60 Hz)\n\n[audio]\nvolume = %d            # 0-100\n\n",
             c->slowdown ? "true" : "false", c->freeplay ? "true" : "false", c->rate == RATE_DISPLAY ? "display" : "native", c->volume);
     fprintf(f, "[input]\nrotate_controls = %s   # rotate stick directions with a Tate display\n", c->rotate_controls ? "true" : "false");
+    fprintf(f, "# keys: up to two per action, SDL key names; F1 menu > CONTROLS changes them\n");
+    for (int i = 0; i < ACT_COUNT; i++) {
+        const char *k0 = c->key[i][0] ? SDL_GetScancodeName((SDL_Scancode)c->key[i][0]) : "";
+        const char *k1 = c->key[i][1] ? SDL_GetScancodeName((SDL_Scancode)c->key[i][1]) : "";
+        fprintf(f, "%s = \"%s%s%s\"\n", act_key_name[i], k0, *k0 && *k1 ? ", " : "", k1);
+    }
+    fprintf(f, "# gamepad buttons (both pads): a b x y back guide start leftstick rightstick leftshoulder rightshoulder ...\n");
+    for (int i = 0; i < PAD_COUNT; i++) {
+        const char *b = c->pad[i] >= 0 ? SDL_GetGamepadStringForButton((SDL_GamepadButton)c->pad[i]) : NULL;
+        fprintf(f, "%s = \"%s\"\n", pad_key_name[i], b ? b : "");
+    }
     fclose(f);
     return 1;
 }

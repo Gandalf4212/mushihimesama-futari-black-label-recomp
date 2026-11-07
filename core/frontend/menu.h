@@ -9,6 +9,7 @@ typedef struct {
     int open, sel;
     int dirty;              /* a setting changed since the menu opened (save on close) */
     Uint64 repeat_at;       /* gamepad axis auto-repeat */
+    int page, csel, capture; /* page 1 = CONTROLS; capture = waiting for a key / pad button for row csel */
 } Menu;
 
 /* What menu_event changed, for the caller to apply. */

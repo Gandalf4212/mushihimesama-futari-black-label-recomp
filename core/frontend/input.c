@@ -23,7 +23,7 @@ void input_pad_removed(Input *in, SDL_JoystickID id)
         if (in->pad[p] && SDL_GetGamepadID(in->pad[p]) == id) { SDL_CloseGamepad(in->pad[p]); in->pad[p] = NULL; }
 }
 
-static uint8_t pad_bits(SDL_Gamepad *g, int *start, int *coin)
+static uint8_t pad_bits(SDL_Gamepad *g, const Config *c, int *start, int *coin)
 {
     if (!g) return 0;
     int ax = SDL_GetGamepadAxis(g, SDL_GAMEPAD_AXIS_LEFTX), ay = SDL_GetGamepadAxis(g, SDL_GAMEPAD_AXIS_LEFTY);
@@ -32,12 +32,14 @@ static uint8_t pad_bits(SDL_Gamepad *g, int *start, int *coin)
     if (SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_DPAD_DOWN) || ay > 16000) b |= DOWN;
     if (SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_DPAD_LEFT) || ax < -16000) b |= LEFT;
     if (SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_DPAD_RIGHT) || ax > 16000) b |= RIGHT;
-    if (SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_SOUTH)) b |= B1;
-    if (SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_EAST)) b |= B2;
-    if (SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_WEST)) b |= B3;
-    if (SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_NORTH)) b |= B4;
-    *start |= SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_START);
-    *coin |= SDL_GetGamepadButton(g, SDL_GAMEPAD_BUTTON_BACK);
+#define PB(i) (c->pad[i] >= 0 && SDL_GetGamepadButton(g, (SDL_GamepadButton)c->pad[i]))
+    if (PB(PAD_B1)) b |= B1;
+    if (PB(PAD_B2)) b |= B2;
+    if (PB(PAD_B3)) b |= B3;
+    if (PB(PAD_B4)) b |= B4;
+    *start |= PB(PAD_START);
+    *coin |= PB(PAD_COIN);
+#undef PB
     return b;
 }
 
@@ -49,19 +51,22 @@ static uint8_t rotate_dirs(uint8_t b, int tate_cw, int tate_ccw)
     return o | (r ? UP : 0) | (l ? DOWN : 0) | (u ? LEFT : 0) | (d ? RIGHT : 0);
 }
 
-void input_frame(Input *in, int freeplay, int rot_cw, int rot_ccw, uint8_t *port_c, uint8_t *port_d, uint8_t *port_l, uint8_t *port_f)
+void input_frame(Input *in, const Config *cfg, int rot_cw, int rot_ccw, uint8_t *port_c, uint8_t *port_d, uint8_t *port_l, uint8_t *port_f)
 {
     const bool *k = SDL_GetKeyboardState(NULL);
-    /* P1: MAME defaults (arrows, LCtrl LAlt Space LShift) + alternates Z X C V */
-    uint8_t p1 = (k[SDL_SCANCODE_UP] ? UP : 0) | (k[SDL_SCANCODE_DOWN] ? DOWN : 0) | (k[SDL_SCANCODE_LEFT] ? LEFT : 0) | (k[SDL_SCANCODE_RIGHT] ? RIGHT : 0)
-               | (k[SDL_SCANCODE_LCTRL] || k[SDL_SCANCODE_Z] ? B1 : 0) | (k[SDL_SCANCODE_LALT] || k[SDL_SCANCODE_X] ? B2 : 0)
-               | (k[SDL_SCANCODE_SPACE] || k[SDL_SCANCODE_C] ? B3 : 0) | (k[SDL_SCANCODE_LSHIFT] || k[SDL_SCANCODE_V] ? B4 : 0);
-    /* P2: MAME defaults R F D G, A S Q W */
-    uint8_t p2 = (k[SDL_SCANCODE_R] ? UP : 0) | (k[SDL_SCANCODE_F] ? DOWN : 0) | (k[SDL_SCANCODE_D] ? LEFT : 0) | (k[SDL_SCANCODE_G] ? RIGHT : 0)
-               | (k[SDL_SCANCODE_A] ? B1 : 0) | (k[SDL_SCANCODE_S] ? B2 : 0) | (k[SDL_SCANCODE_Q] ? B3 : 0) | (k[SDL_SCANCODE_W] ? B4 : 0);
-    int st1 = k[SDL_SCANCODE_1], st2 = k[SDL_SCANCODE_2], coin1 = k[SDL_SCANCODE_5], coin2 = k[SDL_SCANCODE_6];
-    p1 |= pad_bits(in->pad[0], &st1, &coin1);
-    p2 |= pad_bits(in->pad[1], &st2, &coin2);
+    int freeplay = cfg->freeplay;
+#define DOWN_(a) ((cfg->key[a][0] && k[cfg->key[a][0]]) || (cfg->key[a][1] && k[cfg->key[a][1]]))
+    uint8_t pl[2]; int st[2], co[2];
+    for (int p = 0; p < 2; p++) {
+        int o = p * ACT_PER_PLAYER;
+        pl[p] = (DOWN_(o + ACT_UP) ? UP : 0) | (DOWN_(o + ACT_DOWN) ? DOWN : 0) | (DOWN_(o + ACT_LEFT) ? LEFT : 0) | (DOWN_(o + ACT_RIGHT) ? RIGHT : 0)
+              | (DOWN_(o + ACT_B1) ? B1 : 0) | (DOWN_(o + ACT_B2) ? B2 : 0) | (DOWN_(o + ACT_B3) ? B3 : 0) | (DOWN_(o + ACT_B4) ? B4 : 0);
+        st[p] = DOWN_(o + ACT_START); co[p] = DOWN_(o + ACT_COIN);
+    }
+    uint8_t p1 = pl[0], p2 = pl[1];
+    int st1 = st[0], st2 = st[1], coin1 = co[0], coin2 = co[1];
+    p1 |= pad_bits(in->pad[0], cfg, &st1, &coin1);
+    p2 |= pad_bits(in->pad[1], cfg, &st2, &coin2);
     p1 = rotate_dirs(p1, rot_cw, rot_ccw);
     p2 = rotate_dirs(p2, rot_cw, rot_ccw);
 
@@ -79,7 +84,8 @@ void input_frame(Input *in, int freeplay, int rot_cw, int rot_ccw, uint8_t *port
     }
     if (coin1) c |= C_COIN1;
     if (coin2) c |= C_COIN2;
-    if (k[SDL_SCANCODE_9]) c |= C_SERVICE;
+    if (DOWN_(ACT_SERVICE)) c |= C_SERVICE;
     *port_c = (uint8_t)~c; *port_d = (uint8_t)~p1; *port_l = (uint8_t)~p2;
-    *port_f = (uint8_t)~(k[SDL_SCANCODE_F2] ? 0x02 : 0);
+    *port_f = (uint8_t)~(DOWN_(ACT_TEST) ? 0x02 : 0);
+#undef DOWN_
 }

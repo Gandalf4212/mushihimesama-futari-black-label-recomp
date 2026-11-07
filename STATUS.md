@@ -16,6 +16,15 @@
   Cause: core/frontend/input.c opened the same controller twice (explicit open at startup + SDL's
   CONTROLLERDEVICEADDED for already-connected pads), so one pad drove both players' inputs incl.
   Start, and free play coined + started both. Now an already-open pad is ignored.
+* **v0.8.0 plan (user, 2026-11-06):** remaining hurdles = (1) control remapping [done in test18] and
+  (2) the **builder**: rc1's exe contains the recompiled game code (Cave's program in translated form),
+  so it must not be released publicly. Ship our runtime + toolchain and compile the game on the player's
+  PC from their ROMs. Plan: docs/builder-plan.md. rc1 stays a private test build.
+* **test18 (2026-11-06): control remapping.** config.h bindings: key[ACT_COUNT][2] (P1/P2 up..coin, service,
+  test; SDL scancode names in config.toml [input], e.g. p1_b1 = "Left Ctrl, Z") and pad[PAD_COUNT]
+  (B1-B4, start, coin for both pads; SDL gamepad button names; directions fixed d-pad + left stick).
+  F1 > CONTROLS... page (menu.c controls_event/draw): Enter/A capture, Del/X clear, RESET TO DEFAULTS,
+  Esc/B back; F1/F10/F11 cannot be bound. input.c reads the bindings. Untested on Windows.
 * **Release candidate 1 (2026-11-06): F:\claude2\fbl\futaribl_windows_rc1.zip.** Clean tools/build_frontend.sh run
   (SDL3, shaders, all sources) OK. Packaged by tools/package_release.sh: exe, SDL3.dll, README.txt (ours,
   games/futaribl/README.txt: controls, settings, ROM import, bezel packs incl. the LaunchBox "Cave Shoot
