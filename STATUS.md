@@ -11,7 +11,9 @@
   C, RAM images, disassembly listings or artwork ever committed; only binaries were .pyc of our scripts.
   Third-party code: MAME BSD-3 sound files (headers kept); everything else ours.
 * Release files (outputs/release): futaribl-v0.8.0-windows-x64.zip (no game.dll), w64devkit-2.9.1-source.zip.
-  **Left: user downloads the 6 upstream source archives (docs/release.md), then tag v0.8.0 + GitHub release.**
+  Release CI: .github/workflows/release.yml builds + packages on publish (no ROM; game.dll guard) and
+  attaches the zip + toolchain sources (GPL). Simulated locally from a clean clone: same 56-file zip.
+  **Left: user publishes release v0.8.0 on GitHub, then tests the attached zip.**
 
 
 ### Where we are

@@ -1,0 +1,88 @@
+# Builds the Windows release zip when a GitHub release is published, and attaches it to the release
+# together with the source archives of the bundled toolchain (GPLv3 source offer, see docs/release.md).
+# Needs no ROM: the release contains no game code (the player's PC builds assets/game.dll on first run).
+name: release
+on:
+  release:
+    types: [published]
+  workflow_dispatch:          # manual test run: builds and keeps the files as a workflow artifact only
+permissions:
+  contents: write
+env:
+  SDL_VERSION: 3.4.20
+  W64DEVKIT_VERSION: 2.9.1
+jobs:
+  windows:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq mingw-w64 zip glslang-tools p7zip-full
+
+      - name: Version check
+        run: |
+          V=$(sed -n 's/^#define APP_VERSION "\(.*\)"/\1/p' core/frontend/version.h)
+          echo "VERSION=$V" >> "$GITHUB_ENV"
+          if [ "${{ github.event_name }}" = release ] && [ "${{ github.event.release.tag_name }}" != "v$V" ]; then
+            echo "tag ${{ github.event.release.tag_name }} does not match version.h ($V)"; exit 1
+          fi
+
+      - name: SDL3 and toolchain
+        run: |
+          D=$(cd .. && pwd)/deps; mkdir -p "$D" && cd "$D"
+          curl -sSfLo sdl.tgz https://github.com/libsdl-org/SDL/releases/download/release-$SDL_VERSION/SDL3-devel-$SDL_VERSION-mingw.tar.gz
+          tar xzf sdl.tgz
+          curl -sSfLo w64.7z.exe https://github.com/skeeto/w64devkit/releases/download/v$W64DEVKIT_VERSION/w64devkit-x64-$W64DEVKIT_VERSION.7z.exe
+          7z x -y -ow64 w64.7z.exe >/dev/null
+          curl -sSfLo COPYING3 https://raw.githubusercontent.com/gcc-mirror/gcc/master/COPYING3
+          cd "$GITHUB_WORKSPACE" && tools/trim_toolchain.sh "$D/w64/w64devkit" "$D/toolchain" "$D/COPYING3"
+
+      - name: Build
+        run: |
+          make -s
+          tools/build_frontend.sh futaribl windows
+
+      - name: Package
+        run: |
+          mkdir -p dist
+          tools/package_release.sh futaribl "dist/futaribl-v$VERSION-windows-x64.zip" > /dev/null
+          if unzip -l "dist/futaribl-v$VERSION-windows-x64.zip" | grep -qi 'game\.dll'; then echo "game.dll in the zip!"; exit 1; fi
+          unzip -l "dist/futaribl-v$VERSION-windows-x64.zip" | tail -1
+
+      - name: Toolchain sources (GPL)
+        run: |
+          cd dist
+          git clone -q --depth 1 --branch v$W64DEVKIT_VERSION https://github.com/skeeto/w64devkit w64src
+          (cd w64src && git archive --format=zip --prefix=w64devkit-$W64DEVKIT_VERSION-source/ -o ../w64devkit-$W64DEVKIT_VERSION-source.zip HEAD)
+          rm -rf w64src
+          # versions from w64devkit's Dockerfile
+          DF=../../deps/w64/w64devkit/Dockerfile
+          v() { sed -n "s/.*$1_VERSION=\([^ \\\\]*\).*/\1/p" "$DF" | head -1; }
+          G=$(v GCC); B=$(v BINUTILS); GMP=$(v GMP); MPC=$(v MPC); MPFR=$(v MPFR); MW=$(v MINGW)
+          echo "gcc $G binutils $B gmp $GMP mpc $MPC mpfr $MPFR mingw-w64 $MW"
+          for u in https://ftp.gnu.org/gnu/gcc/gcc-$G/gcc-$G.tar.xz \
+                   https://ftp.gnu.org/gnu/binutils/binutils-$B.tar.xz \
+                   https://ftp.gnu.org/gnu/gmp/gmp-$GMP.tar.xz \
+                   https://ftp.gnu.org/gnu/mpc/mpc-$MPC.tar.xz \
+                   https://ftp.gnu.org/gnu/mpfr/mpfr-$MPFR.tar.xz \
+                   https://downloads.sourceforge.net/project/mingw-w64/mingw-w64/mingw-w64-release/mingw-w64-v$MW.tar.bz2; do
+            curl -sSfL --retry 3 -O "$u"
+          done
+          ls -la
+
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" dist/* --clobber
+
+      - name: Keep as artifact (manual runs)
+        if: github.event_name != 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-files
+          path: dist/
+          retention-days: 7

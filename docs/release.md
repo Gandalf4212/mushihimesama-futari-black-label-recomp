@@ -3,17 +3,20 @@
 1. Bump `core/frontend/version.h` and add the version to `CHANGELOG.md`. If the generated code's
    interface changed (sh3.h, recomp_abi.h, gen_c.py / recomp.c output), bump `RECOMP_ABI`.
 2. `tools/check_translator.sh futaribl` and a headless run (`run_headless ... --input stage1.txt`).
-3. `tools/build_frontend.sh futaribl windows`, then
-   `tools/package_release.sh futaribl futaribl-vX.Y.Z-windows-x64.zip` (never `--with-game-code`).
-   Check: `unzip -l` lists no `game.dll`.
-4. Test the zip in an empty folder on Windows: ROM check -> building screen -> game; second start
-   skips the build.
-5. Tag `vX.Y.Z`, push the tag, create the GitHub release with the CHANGELOG section as notes, and
-   attach the zip **plus the toolchain sources** (below).
+3. Commit and push. Optional dry run: Actions > release > Run workflow (files kept as an artifact).
+4. On GitHub: Releases > Draft a new release, tag `vX.Y.Z` (must match version.h), CHANGELOG section as
+   notes, **Publish**. `.github/workflows/release.yml` then builds on a clean runner (no ROM needed),
+   refuses a zip with `game.dll`, and attaches `futaribl-vX.Y.Z-windows-x64.zip` plus the toolchain
+   sources below (a few minutes).
+5. Test the attached zip in an empty folder on Windows: ROM check -> building screen -> game; second
+   start skips the build.
+
+Local equivalent: `tools/build_frontend.sh futaribl windows` (without build/<set>/gen it makes no
+game.dll), `tools/package_release.sh futaribl out.zip`.
 
 ## Toolchain sources (GPLv3: GCC and binutils ship as binaries in `toolchain/`)
 
-Attach to every release that ships the toolchain (w64devkit 2.9.1):
+The workflow attaches these to every release (w64devkit 2.9.1; versions read from its Dockerfile):
 
 | File | From |
 |---|---|
@@ -25,4 +28,3 @@ Attach to every release that ships the toolchain (w64devkit 2.9.1):
 | mpfr-4.2.2.tar.xz | https://ftp.gnu.org/gnu/mpfr/mpfr-4.2.2.tar.xz |
 | mingw-w64-v14.0.0.tar.bz2 | https://downloads.sourceforge.net/project/mingw-w64/mingw-w64/mingw-w64-release/mingw-w64-v14.0.0.tar.bz2 |
 
-(The build workspace can't reach ftp.gnu.org or SourceForge: download these on a PC.)

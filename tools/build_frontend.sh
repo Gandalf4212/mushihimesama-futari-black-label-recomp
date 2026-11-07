@@ -42,12 +42,17 @@ if [ "$TARGET" = windows ]; then
   rm -rf "$OUT/recomp"; mkdir -p "$OUT/recomp/sh3" "$OUT/recomp/runtime"
   cp core/sh3/sh3.h core/sh3/sh3_ops.h "$OUT/recomp/sh3/"; cp core/runtime/recomp_abi.h core/runtime/recomp_dll.c "$OUT/recomp/runtime/"
   cp "$G/hints.txt" "$OUT/recomp/hints.txt"
-  # game code -> game.dll (the exe has none of it; the player's PC builds assets/game.dll, see docs/builder-plan.md)
-  mkdir -p "$OUT/gen"; rm -f "$OUT"/obj/recomp_*.o   # (older builds linked the game code into the exe)
-  ls "$B"/gen/*.c | xargs -P"$(nproc)" -I{} sh -c "o=$OUT/gen/\$(basename {}).o; [ \$o -nt {} ] || $CC -O1 -w -Icore/sh3 -c {} -o \$o"   # skip up-to-date objects
-  U4CRC=$(sed -n 's/^#define GAME_U4_CRC \(0x[0-9a-fA-F]*\)u/\1/p' "$B/game_config.h")
-  $CC -O2 -w -DRECOMP_U4_CRC=${U4CRC}u -c core/runtime/recomp_dll.c -o "$OUT/gen/recomp_dll.o"
-  $CC -shared -o "$OUT/game.dll" "$OUT"/gen/*.o -static-libgcc -Wl,--exclude-all-symbols
+  # game code -> game.dll, only for local testing (needs build/<set>/gen from tools/build_game.sh, i.e. your ROM).
+  # Releases ship without it: the player's PC builds assets/game.dll (docs/builder-plan.md).
+  if ls "$B"/gen/*.c >/dev/null 2>&1; then
+    mkdir -p "$OUT/gen"; rm -f "$OUT"/obj/recomp_*.o   # (older builds linked the game code into the exe)
+    ls "$B"/gen/*.c | xargs -P"$(nproc)" -I{} sh -c "o=$OUT/gen/\$(basename {}).o; [ \$o -nt {} ] || $CC -O1 -w -Icore/sh3 -c {} -o \$o"   # skip up-to-date objects
+    U4CRC=$(sed -n 's/^#define GAME_U4_CRC \(0x[0-9a-fA-F]*\)u/\1/p' "$B/game_config.h")
+    $CC -O2 -w -DRECOMP_U4_CRC=${U4CRC}u -c core/runtime/recomp_dll.c -o "$OUT/gen/recomp_dll.o"
+    $CC -shared -o "$OUT/game.dll" "$OUT"/gen/*.o -static-libgcc -Wl,--exclude-all-symbols
+  else
+    echo "no $B/gen: building without game.dll (release build)"; rm -f "$OUT/game.dll"
+  fi
   for f in $SRC; do $CC -O2 -w -Ibuild -I"$B" -Icore/frontend -I"$SDLW/include" -c $f -o "$OUT/obj/m_$(basename $f).o"; done
   for f in $CXXSRC; do x86_64-w64-mingw32-g++ -std=c++20 -O2 -w -c $f -o "$OUT/obj/m_$(basename $f).o"; done
   x86_64-w64-mingw32-g++ -o "$OUT/$SET.exe" "$OUT"/obj/*.o \

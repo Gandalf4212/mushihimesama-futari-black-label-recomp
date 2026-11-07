@@ -62,7 +62,7 @@ static void wl(void *c, uint32_t a, uint32_t v) { Bus *b = c; uint8_t *m = map(b
 
 /* For the first-run builder: boots the program ROM (as dumped) and fills ram_out (ram_size bytes) with the
  * RAM image at the main entry. Returns 1 if the entry was reached. */
-static int boot_run_image(const uint8_t *rom, uint32_t rom_size, uint32_t ram_size, uint32_t entry, uint8_t *ram_out)
+static int __attribute__((unused)) boot_run_image(const uint8_t *rom, uint32_t rom_size, uint32_t ram_size, uint32_t entry, uint8_t *ram_out)
 {
     static Bus b;
     memset(&b, 0, sizeof b);
