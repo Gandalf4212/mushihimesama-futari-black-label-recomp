@@ -15,7 +15,7 @@
   attaches the zip + toolchain sources (GPL). Simulated locally from a clean clone: same 56-file zip.
   **v0.8.0 published 2026-11-07** (assets: futaribl-v0.8.0-windows-x64.zip sha256 5333d4b4...,
   toolchain-sources-v0.8.0.zip; the 7 separate source files were replaced by that archive via a manual
-  workflow run with tag=v0.8.0). Waiting for the user's test of the release zip.
+  workflow run with tag=v0.8.0). **User-confirmed: the release zip works from an empty folder.**
 
 
 ### Where we are
