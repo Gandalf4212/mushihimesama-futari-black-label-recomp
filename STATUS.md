@@ -13,7 +13,9 @@
 * Release files (outputs/release): futaribl-v0.8.0-windows-x64.zip (no game.dll), w64devkit-2.9.1-source.zip.
   Release CI: .github/workflows/release.yml builds + packages on publish (no ROM; game.dll guard) and
   attaches the zip + toolchain sources (GPL). Simulated locally from a clean clone: same 56-file zip.
-  **Left: user publishes release v0.8.0 on GitHub, then tests the attached zip.**
+  **v0.8.0 published 2026-11-07** (assets: futaribl-v0.8.0-windows-x64.zip sha256 5333d4b4...,
+  toolchain-sources-v0.8.0.zip; the 7 separate source files were replaced by that archive via a manual
+  workflow run with tag=v0.8.0). Waiting for the user's test of the release zip.
 
 
 ### Where we are
