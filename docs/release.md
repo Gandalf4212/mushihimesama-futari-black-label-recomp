@@ -6,8 +6,9 @@
 3. Commit and push. Optional dry run: Actions > release > Run workflow (files kept as an artifact).
 4. On GitHub: Releases > Draft a new release, tag `vX.Y.Z` (must match version.h), CHANGELOG section as
    notes, **Publish**. `.github/workflows/release.yml` then builds on a clean runner (no ROM needed),
-   refuses a zip with `game.dll`, and attaches `futaribl-vX.Y.Z-windows-x64.zip` plus the toolchain
-   sources below (a few minutes).
+   refuses a zip with `game.dll`, and attaches `futaribl-vX.Y.Z-windows-x64.zip` plus
+   `toolchain-sources-vX.Y.Z.zip` (the sources below in one archive; a few minutes).
+   To redo only the sources of an existing release: Actions > release > Run workflow, tag `vX.Y.Z`.
 5. Test the attached zip in an empty folder on Windows: ROM check -> building screen -> game; second
    start skips the build.
 
@@ -16,7 +17,7 @@ game.dll), `tools/package_release.sh futaribl out.zip`.
 
 ## Toolchain sources (GPLv3: GCC and binutils ship as binaries in `toolchain/`)
 
-The workflow attaches these to every release (w64devkit 2.9.1; versions read from its Dockerfile):
+The workflow packs these into `toolchain-sources-vX.Y.Z.zip` for every release (w64devkit 2.9.1; versions read from its Dockerfile):
 
 | File | From |
 |---|---|

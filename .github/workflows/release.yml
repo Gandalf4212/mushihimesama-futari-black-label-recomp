@@ -5,7 +5,12 @@ name: release
 on:
   release:
     types: [published]
-  workflow_dispatch:          # manual test run: builds and keeps the files as a workflow artifact only
+  workflow_dispatch:          # manual run: no tag = dry run (files kept as an artifact only);
+    inputs:                   # tag = replace that release's toolchain source files with the single archive
+      tag:
+        description: "Existing release tag whose toolchain sources to (re)attach as one archive (empty = dry run)"
+        required: false
+        default: ""
 permissions:
   contents: write
 env:
@@ -54,12 +59,12 @@ jobs:
 
       - name: Toolchain sources (GPL)
         run: |
-          cd dist
+          S=toolchain-sources-v$VERSION; mkdir -p "src/$S" && cd "src/$S"
           git clone -q --depth 1 --branch v$W64DEVKIT_VERSION https://github.com/skeeto/w64devkit w64src
           (cd w64src && git archive --format=zip --prefix=w64devkit-$W64DEVKIT_VERSION-source/ -o ../w64devkit-$W64DEVKIT_VERSION-source.zip HEAD)
           rm -rf w64src
           # versions from w64devkit's Dockerfile
-          DF=../../deps/w64/w64devkit/Dockerfile
+          DF=$GITHUB_WORKSPACE/../deps/w64/w64devkit/Dockerfile
           v() { sed -n "s/.*$1_VERSION=\([^ \\\\]*\).*/\1/p" "$DF" | head -1; }
           G=$(v GCC); B=$(v BINUTILS); GMP=$(v GMP); MPC=$(v MPC); MPFR=$(v MPFR); MW=$(v MINGW)
           echo "gcc $G binutils $B gmp $GMP mpc $MPC mpfr $MPFR mingw-w64 $MW"
@@ -71,7 +76,8 @@ jobs:
                    https://downloads.sourceforge.net/project/mingw-w64/mingw-w64/mingw-w64-release/mingw-w64-v$MW.tar.bz2; do
             curl -sSfL --retry 3 -O "$u"
           done
-          ls -la
+          printf 'Source code of the C compiler bundled in the release toolchain folder (w64devkit %s):\r\nGCC %s, GNU binutils %s, GMP %s, MPC %s, MPFR %s and Mingw-w64 %s, plus the w64devkit build\r\nscripts and patches that produced the binaries. Provided for the GNU GPL v3 source requirement.\r\nYou do not need these to play the game.\r\n' "$W64DEVKIT_VERSION" "$G" "$B" "$GMP" "$MPC" "$MPFR" "$MW" > README.txt
+          cd .. && zip -q -0 -r "../dist/$S.zip" "$S" && ls -la ../dist
 
       - name: Attach to the release
         if: github.event_name == 'release'
@@ -79,8 +85,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "${{ github.event.release.tag_name }}" dist/* --clobber
 
+      - name: Replace the toolchain sources of an existing release (manual run with a tag)
+        if: github.event_name == 'workflow_dispatch' && inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          gh release upload "$TAG" dist/toolchain-sources-*.zip --clobber
+          for a in $(gh release view "$TAG" --json assets --jq '.assets[].name' | grep -E '\.tar\.(xz|bz2|gz)$|^w64devkit-.*-source\.zip$'); do
+            gh release delete-asset "$TAG" "$a" --yes
+          done
+          gh release view "$TAG" --json assets --jq '.assets[].name'
+
       - name: Keep as artifact (manual runs)
-        if: github.event_name != 'release'
+        if: github.event_name == 'workflow_dispatch' && inputs.tag == ''
         uses: actions/upload-artifact@v4
         with:
           name: release-files
